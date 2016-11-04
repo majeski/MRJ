@@ -1,0 +1,8 @@
+[package]
+name = "instant"
+version = "0.1.0"
+authors = ["Michał Majewski <mm347108@students.mimuw.edu.pl>"]
+
+[dependencies]
+nom = "^1.2.4"
+
