@@ -45,10 +45,10 @@ fn optimize_stack_size(expr: &mut Expr) -> i32 {
     }
 }
 
-pub fn compile(program: &Program, out: &mut io::Write) -> io::Result<()> {
+pub fn compile(program: &Program, class_name: &str, out: &mut io::Write) -> io::Result<()> {
     let &Program(ref stmts) = program;
 
-    try!(create_prelude(program, out));
+    try!(create_prelude(program, class_name, out));
     let mut vars = VariableMap::new();
     for stmt in stmts {
         try!(compile_stmt(stmt, &mut vars, out));
@@ -131,7 +131,7 @@ fn compile_op(op: Operator, out: &mut io::Write) -> io::Result<()> {
     }
 }
 
-fn create_prelude(program: &Program, out: &mut io::Write) -> io::Result<()> {
+fn create_prelude(program: &Program, class_name: &str, out: &mut io::Write) -> io::Result<()> {
     let Program(ref stmts) = *program;
     let stack_size = cmp::max(2,
                               match stmts.iter().map(stack_size_stmt).max() {
@@ -140,8 +140,8 @@ fn create_prelude(program: &Program, out: &mut io::Write) -> io::Result<()> {
                               });
     let vars_count = variable_count(stmts) + 1;
 
+    try!(out.write_fmt(format_args!(".class public {}\n", class_name)));
     try!(out.write_all(b"\
-        .class public Instant\n\
         .super java/lang/Object\n\
         \n\
         .method public <init>()V\n\

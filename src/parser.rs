@@ -3,15 +3,34 @@ use nom::*;
 
 use ast::*;
 
-named!(pub program (&[u8]) -> Program, chain!(
+pub fn parse(raw: String) -> Result<Program, String> {
+    match program(raw.as_bytes()) {
+        IResult::Done(rest, t) => {
+            if rest.is_empty() {
+                Ok(t)
+            } else {
+                panic!("impossible happened");
+            }
+        }
+        // IResult::Error(Err::Position(_, p)) => {
+        //     Err(format!("failed to parse near: {:?}",
+        //                 std::str::from_utf8(p).expect("not utf8")))
+        // }
+        IResult::Error(err) => Err(format!("failed to parse with error: {:?}", err)),
+        IResult::Incomplete(_) => panic!("impossible happened"),
+    }
+}
+
+named!(program (&[u8]) -> Program, complete!(
+    chain!(
         stmts: separated_list!(semi, statement) ~
         multispace? ~
         eof,
         || Program(stmts)
     )
-);
+));
 
-named!(pub statement (&[u8]) -> Stmt, alt!(assignment | stmt_expr));
+named!(statement (&[u8]) -> Stmt, alt!(assignment | stmt_expr));
 named!(assignment (&[u8]) -> Stmt, complete!(
     chain!(
         ident: identifier ~
@@ -23,9 +42,9 @@ named!(assignment (&[u8]) -> Stmt, complete!(
 
 named!(stmt_expr (&[u8]) -> Stmt, map!(expr1, Stmt::Expr));
 
-named!(pub expr1 (&[u8]) -> Expr, alt!(do_expr1 | expr2));
-named!(pub expr2 (&[u8]) -> Expr, alt!(do_expr2 | expr3));
-named!(pub expr3 (&[u8]) -> Expr, alt!(do_expr3 | expr4));
+named!(expr1 (&[u8]) -> Expr, alt!(do_expr1 | expr2));
+named!(expr2 (&[u8]) -> Expr, alt!(do_expr2 | expr3));
+named!(expr3 (&[u8]) -> Expr, alt!(do_expr3 | expr4));
 
 // +
 named!(do_expr1 (&[u8]) -> Expr, complete!(
@@ -38,7 +57,7 @@ named!(do_expr1 (&[u8]) -> Expr, complete!(
 ));
 
 // -
-named!(pub do_expr2 (&[u8]) -> Expr, complete!(
+named!(do_expr2 (&[u8]) -> Expr, complete!(
     chain!(
         mut expr: expr3 ~
         many1!(tap!(rhs: preceded!(sub_op, expr3) =>
