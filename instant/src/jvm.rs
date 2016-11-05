@@ -78,7 +78,7 @@ fn compile_assign(name: &String,
                   -> io::Result<()> {
     try!(compile_expr(expr, vars, out));
     if !vars.contains_key(name) {
-        let idx = vars.len();
+        let idx = vars.len() + 1;
         vars.insert(name.clone(), idx);
     }
     pop_val(name, vars, out)
@@ -133,11 +133,8 @@ fn compile_op(op: Operator, out: &mut io::Write) -> io::Result<()> {
 
 fn create_prelude(program: &Program, class_name: &str, out: &mut io::Write) -> io::Result<()> {
     let Program(ref stmts) = *program;
-    let stack_size = cmp::max(2,
-                              match stmts.iter().map(stack_size_stmt).max() {
-                                  Some(x) => x,
-                                  None => 0,
-                              });
+    let stack_size = cmp::max(2, stmts.iter().map(stack_size_stmt).max().unwrap_or(0));
+    // + main argument
     let vars_count = variable_count(stmts) + 1;
 
     try!(out.write_fmt(format_args!(".class public {}\n", class_name)));
