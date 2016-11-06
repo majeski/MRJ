@@ -1,10 +1,10 @@
 use std;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program(pub std::vec::Vec<Stmt>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Assign(String, Expr),
     Expr(Expr),

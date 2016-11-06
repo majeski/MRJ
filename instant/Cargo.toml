@@ -6,3 +6,6 @@ authors = ["Michał Majewski <mm347108@students.mimuw.edu.pl>"]
 [dependencies]
 nom = "^1.2.4"
 
+[features]
+jvm = []
+llvm = []
