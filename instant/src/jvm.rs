@@ -1,10 +1,7 @@
-use std::cmp;
-use std::mem;
-use std::io;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::vec::Vec;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::{cmp, io, mem};
 
 use ast::*;
 
@@ -26,8 +23,6 @@ pub fn optimize(program: &mut Program) {
 // returns stack size
 fn optimize_stack_size(expr: &mut Expr) -> i32 {
     match *expr {
-        Expr::Const(_) => 1,
-        Expr::Ident(_) => 1,
         Expr::BinOp(ref mut lhs, Operator::Sub, ref mut rhs) |
         Expr::BinOp(ref mut lhs, Operator::Div, ref mut rhs) => {
             cmp::max(optimize_stack_size(lhs), optimize_stack_size(rhs) + 1)
@@ -42,104 +37,52 @@ fn optimize_stack_size(expr: &mut Expr) -> i32 {
             }
             cmp::max(lsize, rsize + 1)
         }
+        _ => 1,
     }
 }
 
-pub fn compile(program: &Program, class_name: &str, out: &mut io::Write) -> io::Result<()> {
-    let &Program(ref stmts) = program;
+pub struct JVMContext<'a> {
+    vars: HashMap<String, usize>,
+    out: &'a mut io::Write,
+}
 
-    try!(create_prelude(program, class_name, out));
-    let mut vars = VariableMap::new();
-    for stmt in stmts {
-        try!(compile_stmt(stmt, &mut vars, out));
+impl<'a> JVMContext<'a> {
+    pub fn new(out: &'a mut io::Write) -> JVMContext<'a> {
+        JVMContext {
+            vars: HashMap::new(),
+            out: out,
+        }
     }
-    try!(create_end(out));
+
+    fn add_var(&mut self, name: &String) {
+        if !self.vars.contains_key(name) {
+            let idx = self.vars.len() + 1;
+            self.vars.insert(name.clone(), idx);
+        }
+    }
+}
+
+trait JVMCompile {
+    fn compile(&self, ctx: &mut JVMContext) -> io::Result<()>;
+}
+
+pub fn compile(program: &Program, class_name: &str, ctx: &mut JVMContext) -> io::Result<()> {
+    try!(create_prelude(program, class_name, ctx));
+    for stmt in &program.0 {
+        try!(stmt.compile(ctx))
+    }
+    try!(create_end(ctx));
     Ok(())
 }
 
-fn compile_stmt(stmt: &Stmt, vars: &mut VariableMap, out: &mut io::Write) -> io::Result<()> {
-    match *stmt {
-        Stmt::Assign(ref name, ref expr) => compile_assign(name, expr, vars, out),
-        Stmt::Expr(ref e) => {
-            try!(compile_expr(e, vars, out));
-            try!(out.write_all(b"\
-                getstatic java/lang/System/out Ljava/io/PrintStream;\n\
-                swap\n\
-                invokevirtual java/io/PrintStream/println(I)V\n"));
-            Ok(())
-        }
-    }
-}
-
-fn compile_assign(name: &String,
-                  expr: &Expr,
-                  vars: &mut VariableMap,
-                  out: &mut io::Write)
-                  -> io::Result<()> {
-    try!(compile_expr(expr, vars, out));
-    if !vars.contains_key(name) {
-        let idx = vars.len() + 1;
-        vars.insert(name.clone(), idx);
-    }
-    store_var(name, vars, out)
-}
-
-fn compile_expr(expr: &Expr, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
-    match *expr {
-        Expr::Const(x) => push_int(x, out),
-        Expr::Ident(ref x) => load_var(x, vars, out),
-        Expr::BinOp(ref lhs, op, ref rhs) => {
-            try!(compile_expr(lhs.deref(), vars, out));
-            try!(compile_expr(rhs.deref(), vars, out));
-            try!(compile_op(op, out));
-            Ok(())
-        }
-    }
-}
-
-fn push_int(val: i32, out: &mut io::Write) -> io::Result<()> {
-    match val {
-        0...5 => out.write_fmt(format_args!("iconst_{}\n", val)),
-        6...127 => out.write_fmt(format_args!("bipush {}\n", val)),
-        _ => out.write_fmt(format_args!("ldc {}\n", val)),
-    }
-}
-
-fn load_var(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
-    let short_idx = 3 as usize;
-    match vars.get(name) {
-        Some(idx) if idx <= &short_idx => out.write_fmt(format_args!("iload_{}\n", idx)),
-        Some(idx) => out.write_fmt(format_args!("iload {}\n", idx)),
-        None => panic!("Undefined variable"),
-    }
-}
-
-fn store_var(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
-    let short_idx = 3 as usize;
-    match vars.get(name) {
-        Some(idx) if idx <= &short_idx => out.write_fmt(format_args!("istore_{}\n", idx)),
-        Some(idx) => out.write_fmt(format_args!("istore {}\n", idx)),
-        None => panic!("Undefined variable"),
-    }
-}
-
-fn compile_op(op: Operator, out: &mut io::Write) -> io::Result<()> {
-    match op {
-        Operator::Add => out.write_all(b"iadd\n"),
-        Operator::Sub => out.write_all(b"isub\n"),
-        Operator::Mul => out.write_all(b"imul\n"),
-        Operator::Div => out.write_all(b"idiv\n"),
-    }
-}
-
-fn create_prelude(program: &Program, class_name: &str, out: &mut io::Write) -> io::Result<()> {
-    let Program(ref stmts) = *program;
+fn create_prelude(program: &Program, class_name: &str, ctx: &mut JVMContext) -> io::Result<()> {
+    let stmts = &program.0;
     let stack_size = cmp::max(2, stmts.iter().map(Stmt::stack_size).max().unwrap_or(0));
     // + main argument
     let vars_count = variable_count(stmts) + 1;
 
-    try!(out.write_fmt(format_args!(".class public {}\n", class_name)));
-    try!(out.write_all(b"\
+    try!(ctx.out.write_fmt(format_args!(".class public {}\n", class_name)));
+    try!(ctx.out.write_all(b"\
         .super java/lang/Object\n\
         \n\
         .method public <init>()V\n\
@@ -151,14 +94,8 @@ fn create_prelude(program: &Program, class_name: &str, out: &mut io::Write) -> i
         .method public static main([Ljava/lang/String;)V\n\
         "));
 
-    try!(out.write_fmt(format_args!(".limit stack  {}\n", stack_size)));
-    try!(out.write_fmt(format_args!(".limit locals {}\n", vars_count)));
-    Ok(())
-}
-
-fn create_end(out: &mut io::Write) -> io::Result<()> {
-    try!(out.write_all(b"return\n"));
-    try!(out.write_all(b".end method\n"));
+    try!(ctx.out.write_fmt(format_args!(".limit stack  {}\n", stack_size)));
+    try!(ctx.out.write_fmt(format_args!(".limit locals {}\n", vars_count)));
     Ok(())
 }
 
@@ -175,7 +112,11 @@ fn variable_count(stmts: &Vec<Stmt>) -> usize {
     vars.len()
 }
 
-impl Stmt {
+trait StackSize {
+    fn stack_size(&self) -> i32;
+}
+
+impl StackSize for Stmt {
     fn stack_size(&self) -> i32 {
         match *self {
             Stmt::Assign(_, ref e) => e.stack_size(),
@@ -184,7 +125,7 @@ impl Stmt {
     }
 }
 
-impl Expr {
+impl StackSize for Expr {
     fn stack_size(&self) -> i32 {
         match *self {
             Expr::BinOp(ref lhs, _, ref rhs) => {
@@ -193,4 +134,88 @@ impl Expr {
             _ => 1,
         }
     }
+}
+
+fn create_end(ctx: &mut JVMContext) -> io::Result<()> {
+    try!(ctx.out.write_all(b"return\n"));
+    try!(ctx.out.write_all(b".end method\n"));
+    Ok(())
+}
+
+impl JVMCompile for Stmt {
+    fn compile(&self, ctx: &mut JVMContext) -> io::Result<()> {
+        match *self {
+            Stmt::Assign(ref name, ref e) => {
+                try!(e.compile(ctx));
+                ctx.add_var(name);
+                store_var(name, ctx)
+            }
+            Stmt::Expr(ref e) => {
+                try!(e.compile(ctx));
+                try!(ctx.out.write_all(b"\
+                    getstatic java/lang/System/out Ljava/io/PrintStream;\n\
+                    swap\n\
+                    invokevirtual java/io/PrintStream/println(I)V\n"));
+                Ok(())
+            }
+        }
+    }
+}
+
+impl JVMCompile for Expr {
+    fn compile(&self, ctx: &mut JVMContext) -> io::Result<()> {
+        match *self {
+            Expr::Const(x) => x.compile(ctx),
+            Expr::Ident(ref x) => load_var(x, ctx),
+            Expr::BinOp(ref lhs, op, ref rhs) => {
+                try!(lhs.deref().compile(ctx));
+                try!(rhs.deref().compile(ctx));
+                try!(op.compile(ctx));
+                Ok(())
+            }
+        }
+    }
+}
+
+impl JVMCompile for Operator {
+    fn compile(&self, ctx: &mut JVMContext) -> io::Result<()> {
+        let op = match *self {
+            Operator::Add => b"iadd\n",
+            Operator::Sub => b"isub\n",
+            Operator::Mul => b"imul\n",
+            Operator::Div => b"idiv\n",
+        };
+        ctx.out.write_all(op)
+    }
+}
+
+impl JVMCompile for i32 {
+    fn compile(&self, ctx: &mut JVMContext) -> io::Result<()> {
+        let instr = match *self {
+            0...5 => format!("iconst_{}\n", self),
+            6...127 => format!("bipush {}\n", self),
+            _ => format!("ldc {}\n", self),
+        };
+        ctx.out.write_all(instr.as_bytes())
+    }
+}
+
+fn load_var(name: &String, ctx: &mut JVMContext) -> io::Result<()> {
+    let short_idx = 3 as usize;
+    let instr = match ctx.vars.get(name) {
+        Some(idx) if idx <= &short_idx => format!("iload_{}\n", idx),
+        Some(idx) => format!("iload {}\n", idx),
+        None => panic!("Undefined variable"),
+    };
+    ctx.out.write_all(instr.as_bytes())
+}
+
+fn store_var(name: &String, ctx: &mut JVMContext) -> io::Result<()> {
+    let short_idx = 3 as usize;
+    let instr = match ctx.vars.get(name) {
+        Some(idx) if idx <= &short_idx => format!("istore_{}\n", idx),
+        Some(idx) => format!("istore {}\n", idx),
+        None => panic!("Undefined variable"),
+    };
+    ctx.out.write_all(instr.as_bytes())
 }

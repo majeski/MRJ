@@ -45,7 +45,11 @@ pub fn compile(program: &Program, context: &mut LLVMContext) -> io::Result<()> {
     program.compile(context)
 }
 
-impl Program {
+trait LLVMCompile<T> {
+    fn compile(&self, context: &mut LLVMContext) -> io::Result<T>;
+}
+
+impl LLVMCompile<()> for Program {
     fn compile(&self, context: &mut LLVMContext) -> io::Result<()> {
         let Program(ref stmts) = *self;
         try!(context.out.write_all(b"\
@@ -59,7 +63,7 @@ impl Program {
     }
 }
 
-impl Stmt {
+impl LLVMCompile<()> for Stmt {
     fn compile(&self, context: &mut LLVMContext) -> io::Result<()> {
         match *self {
             Stmt::Assign(ref name, ref e) => {
@@ -82,7 +86,7 @@ impl Stmt {
     }
 }
 
-impl Expr {
+impl LLVMCompile<Val> for Expr {
     fn compile(&self, context: &mut LLVMContext) -> io::Result<Val> {
         match *self {
             Expr::Const(x) => Ok(Val::Const(x)),
@@ -93,26 +97,20 @@ impl Expr {
                     .write_fmt(format_args!("{} = load i32, i32* {}\n", id, var_id)));
                 Ok(id)
             }
-            Expr::BinOp(ref lhs, op, ref rhs) => {
+            Expr::BinOp(ref lhs, operator, ref rhs) => {
                 let l = try!(lhs.deref().compile(context));
                 let r = try!(rhs.deref().compile(context));
-                op.compile(l, r, context)
+                let op = match operator {
+                    Operator::Add => "add",
+                    Operator::Sub => "sub",
+                    Operator::Mul => "mul",
+                    Operator::Div => "sdiv",
+                };
+                let res = context.get_next_id();
+                try!(context.out
+                    .write_fmt(format_args!("{} = {} i32 {}, {}\n", res, op, l, r)));
+                Ok(res)
             }
         }
-    }
-}
-
-impl Operator {
-    fn compile(&self, lval: Val, rval: Val, context: &mut LLVMContext) -> io::Result<Val> {
-        let op = match *self {
-            Operator::Add => "add",
-            Operator::Sub => "sub",
-            Operator::Mul => "mul",
-            Operator::Div => "sdiv",
-        };
-        let res_id = context.get_next_id();
-        try!(context.out
-            .write_fmt(format_args!("{} = {} i32 {}, {}\n", res_id, op, lval, rval)));
-        Ok(res_id)
     }
 }

@@ -1,8 +1,6 @@
-use std::env;
-use std::error::Error;
-use std::io::{self, Read};
+use std::io::{self, Read, Error, ErrorKind};
 use std::process::Command;
-use std::str;
+use std::{env, str};
 
 extern crate instant;
 use instant::ast::Program;
@@ -21,16 +19,34 @@ fn main() {
 
     let path = std::path::Path::new(&args[1]);
     let raw_program = match read_file(path) {
-        Err(why) => panic!(format!("Couldn't read file {}: {}", &args[1], why.description())),
+        Err(why) => {
+            println!("Couldn't read file {}: {}", &args[1], why);
+            return;
+        }
         Ok(r) => r,
     };
 
-    let program = parser::parse(raw_program).expect("Parse error");
+    let program = match parser::parse(raw_program) {
+        Err(why) => {
+            println!("Parse error: {}", why);
+            return;
+        }
+        Ok(x) => x,
+    };
     match check_vars(&program) {
-        Err(why) => panic!(format!("Undefined variable: {}", why)),
+        Err(why) => {
+            println!("Undefined variable: {}", why);
+            return;
+        }
         _ => {}
     };
-    compile(program, &path).expect("Compilation error");
+    match compile(program, &path) {
+        Err(why) => {
+            println!("Compilation error: {}", why);
+            return;
+        }
+        _ => {}
+    }
 }
 
 fn read_file(path: &std::path::Path) -> Result<String, io::Error> {
@@ -42,11 +58,11 @@ fn read_file(path: &std::path::Path) -> Result<String, io::Error> {
 
 fn compile(program: Program, input: &std::path::Path) -> Result<(), io::Error> {
     if cfg!(feature = "jvm") {
-        println!("generating jvm");
+        println!("Generating JVM");
         try!(compile_jvm(program.clone(), input));
     }
     if cfg!(feature = "llvm") {
-        println!("generating llvm");
+        println!("Generating LLVM");
         try!(compile_llvm(program, input));
     }
     Ok(())
@@ -59,18 +75,19 @@ fn compile_jvm(mut program: Program, input: &std::path::Path) -> Result<(), io::
     let out_class_dir = input.parent().expect(err);
 
     {
-        let mut out_jasmin = std::fs::File::create(&out_jasmin_path).unwrap();
         jvm::optimize(&mut program);
-        try!(jvm::compile(&program, filename, &mut out_jasmin));
+        let mut out_jasmin = std::fs::File::create(&out_jasmin_path).unwrap();
+        let mut ctx = jvm::JVMContext::new(&mut out_jasmin);
+        try!(jvm::compile(&program, filename, &mut ctx));
     }
 
-    execute_bash_command(Command::new("java".to_string())
-                             .arg("-jar")
-                             .arg("lib/jasmin.jar".to_string())
-                             .arg("-d")
-                             .arg(out_class_dir.to_str().expect(err))
-                             .arg(out_jasmin_path.to_str().expect(err)),
-                         "Failed to call jasmin");
+    try!(execute_bash_command(Command::new("java".to_string())
+                                  .arg("-jar")
+                                  .arg("lib/jasmin.jar".to_string())
+                                  .arg("-d")
+                                  .arg(out_class_dir.to_str().expect(err))
+                                  .arg(out_jasmin_path.to_str().expect(err)),
+                              "Failed to call jasmin"));
     Ok(())
 }
 
@@ -88,30 +105,33 @@ fn compile_llvm(program: Program, input: &std::path::Path) -> Result<(), io::Err
     }
 
     // compile
-    execute_bash_command(Command::new("llvm-as".to_string())
-                             .arg(out_ll_path.to_str().expect(err))
-                             .arg("-o")
-                             .arg(out_bc_path_tmp.to_str().expect(err)),
-                         "Failed to translate to LLVM bitcode");
+    try!(execute_bash_command(Command::new("llvm-as".to_string())
+                                  .arg(out_ll_path.to_str().expect(err))
+                                  .arg("-o")
+                                  .arg(out_bc_path_tmp.to_str().expect(err)),
+                              "Failed to translate to LLVM bitcode"));
 
     // link
-    execute_bash_command(Command::new("llvm-link".to_string())
-                             .arg("-o")
-                             .arg(out_bc_path.to_str().expect(err))
-                             .arg(out_bc_path_tmp.to_str().expect(err))
-                             .arg("lib/runtime.bc".to_string()),
-                         "Failed to link with runtime.bc");
+    try!(execute_bash_command(Command::new("llvm-link".to_string())
+                                  .arg("-o")
+                                  .arg(out_bc_path.to_str().expect(err))
+                                  .arg(out_bc_path_tmp.to_str().expect(err))
+                                  .arg("lib/runtime.bc".to_string()),
+                              "Failed to link with runtime.bc"));
 
     // rm temp .bc
-    execute_bash_command(Command::new("rm".to_string()).arg(out_bc_path_tmp.to_str().expect(err)),
-                         "Failed to clean up temporary .bc file");
+    try!(execute_bash_command(Command::new("rm".to_string())
+                                  .arg(out_bc_path_tmp.to_str().expect(err)),
+                              "Failed to clean up temporary .bc file"));
 
     Ok(())
 }
 
-fn execute_bash_command(cmd: &mut Command, err: &'static str) {
-    let es = cmd.status().expect(err);
+fn execute_bash_command(cmd: &mut Command, err: &'static str) -> Result<(), io::Error> {
+    let es = try!(cmd.status());
     if !es.success() {
-        panic!(err);
+        Err(Error::new(ErrorKind::Other, err))
+    } else {
+        Ok(())
     }
 }
