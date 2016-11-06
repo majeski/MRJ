@@ -81,13 +81,13 @@ fn compile_assign(name: &String,
         let idx = vars.len() + 1;
         vars.insert(name.clone(), idx);
     }
-    pop_val(name, vars, out)
+    store_var(name, vars, out)
 }
 
 fn compile_expr(expr: &Expr, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
     match *expr {
         Expr::Const(x) => push_int(x, out),
-        Expr::Ident(ref x) => push_val(x, vars, out),
+        Expr::Ident(ref x) => load_var(x, vars, out),
         Expr::BinOp(ref lhs, op, ref rhs) => {
             try!(compile_expr(lhs.deref(), vars, out));
             try!(compile_expr(rhs.deref(), vars, out));
@@ -100,11 +100,12 @@ fn compile_expr(expr: &Expr, vars: &VariableMap, out: &mut io::Write) -> io::Res
 fn push_int(val: i32, out: &mut io::Write) -> io::Result<()> {
     match val {
         0...5 => out.write_fmt(format_args!("iconst_{}\n", val)),
+        6...127 => out.write_fmt(format_args!("bipush {}\n", val)),
         _ => out.write_fmt(format_args!("ldc {}\n", val)),
     }
 }
 
-fn push_val(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
+fn load_var(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
     let short_idx = 3 as usize;
     match vars.get(name) {
         Some(idx) if idx <= &short_idx => out.write_fmt(format_args!("iload_{}\n", idx)),
@@ -113,7 +114,7 @@ fn push_val(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Resul
     }
 }
 
-fn pop_val(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
+fn store_var(name: &String, vars: &VariableMap, out: &mut io::Write) -> io::Result<()> {
     let short_idx = 3 as usize;
     match vars.get(name) {
         Some(idx) if idx <= &short_idx => out.write_fmt(format_args!("istore_{}\n", idx)),
@@ -133,7 +134,7 @@ fn compile_op(op: Operator, out: &mut io::Write) -> io::Result<()> {
 
 fn create_prelude(program: &Program, class_name: &str, out: &mut io::Write) -> io::Result<()> {
     let Program(ref stmts) = *program;
-    let stack_size = cmp::max(2, stmts.iter().map(stack_size_stmt).max().unwrap_or(0));
+    let stack_size = cmp::max(2, stmts.iter().map(Stmt::stack_size).max().unwrap_or(0));
     // + main argument
     let vars_count = variable_count(stmts) + 1;
 
@@ -174,19 +175,22 @@ fn variable_count(stmts: &Vec<Stmt>) -> usize {
     vars.len()
 }
 
-fn stack_size_stmt(stmt: &Stmt) -> i32 {
-    match *stmt {
-        Stmt::Assign(_, ref e) => stack_size_expr(e),
-        Stmt::Expr(ref e) => stack_size_expr(e),
+impl Stmt {
+    fn stack_size(&self) -> i32 {
+        match *self {
+            Stmt::Assign(_, ref e) => e.stack_size(),
+            Stmt::Expr(ref e) => e.stack_size(),
+        }
     }
 }
 
-fn stack_size_expr(expr: &Expr) -> i32 {
-    match *expr {
-        Expr::BinOp(ref lhs, _, ref rhs) => {
-            cmp::max(stack_size_expr(lhs.deref()),
-                     stack_size_expr(rhs.deref()) + 1)
+impl Expr {
+    fn stack_size(&self) -> i32 {
+        match *self {
+            Expr::BinOp(ref lhs, _, ref rhs) => {
+                cmp::max(lhs.deref().stack_size(), rhs.deref().stack_size() + 1)
+            }
+            _ => 1,
         }
-        _ => 1,
     }
 }

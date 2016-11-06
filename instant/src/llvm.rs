@@ -1,8 +1,7 @@
 use std::io;
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::fmt;
-use std::fmt::Display;
+use std::fmt::{self, Display};
 
 use ast::*;
 
@@ -75,7 +74,8 @@ impl Stmt {
             }
             Stmt::Expr(ref e) => {
                 let id = try!(e.compile(context));
-                try!(context.out.write_fmt(format_args!("call void @printInt(i32 {})\n", id)));
+                try!(context.out
+                    .write_fmt(format_args!("call void @printInt(i32 {})\n", id)));
                 Ok(())
             }
         }
@@ -89,7 +89,8 @@ impl Expr {
             Expr::Ident(ref s) => {
                 let id = context.get_next_id();
                 let var_id = context.vars.get(s).expect("Undefined variable");
-                try!(context.out.write_fmt(format_args!("{} = load i32, i32* {}\n", id, var_id)));
+                try!(context.out
+                    .write_fmt(format_args!("{} = load i32, i32* {}\n", id, var_id)));
                 Ok(id)
             }
             Expr::BinOp(ref lhs, op, ref rhs) => {

@@ -1,5 +1,4 @@
-use std;
-use std::fmt;
+use std::{self,fmt};
 
 #[derive(Debug, Clone)]
 pub struct Program(pub std::vec::Vec<Stmt>);
@@ -29,7 +28,7 @@ impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Program(ref stmts) = *self;
         for ref stmt in stmts {
-            try!(write!(f, "{}\n", stmt));
+            try!(write!(f, "{};\n", stmt));
         }
         Ok(())
     }
@@ -38,8 +37,8 @@ impl fmt::Display for Program {
 impl fmt::Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Stmt::Assign(ref iden, ref expr) => write!(f, "{} = {};", iden, expr),
-            Stmt::Expr(ref expr) => write!(f, "{};", expr),
+            Stmt::Assign(ref iden, ref expr) => write!(f, "{} = {}", iden, expr),
+            Stmt::Expr(ref expr) => write!(f, "{}", expr),
         }
     }
 }

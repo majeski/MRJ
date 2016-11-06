@@ -6,6 +6,7 @@ use std::str;
 
 extern crate instant;
 use instant::ast::Program;
+use instant::helpers::check_vars;
 use instant::jvm;
 use instant::llvm;
 use instant::parser;
@@ -25,6 +26,10 @@ fn main() {
     };
 
     let program = parser::parse(raw_program).expect("Parse error");
+    match check_vars(&program) {
+        Err(why) => panic!(format!("Undefined variable: {}", why)),
+        _ => {}
+    };
     compile(program, &path).expect("Compilation error");
 }
 
