@@ -1,4 +1,4 @@
-use std::{self,fmt};
+use std::{self, fmt};
 
 #[derive(Debug, Clone)]
 pub struct Program(pub std::vec::Vec<Stmt>);

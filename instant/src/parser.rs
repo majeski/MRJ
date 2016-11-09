@@ -1,3 +1,6 @@
+use std::ops::Index;
+use std::ops::Range;
+use std::ops::RangeFrom;
 use std;
 use nom::*;
 
@@ -5,26 +8,16 @@ use ast::*;
 
 pub fn parse(raw: String) -> Result<Program, String> {
     match program(raw.as_bytes()) {
-        IResult::Done(rest, t) => {
-            if rest.is_empty() {
-                Ok(t)
-            } else {
-                panic!("impossible happened");
-            }
-        }
-        // IResult::Error(Err::Position(_, p)) => {
-        //     Err(format!("failed to parse near: {:?}",
-        //                 std::str::from_utf8(p).expect("not utf8")))
-        // }
-        IResult::Error(err) => Err(format!("failed to parse with error: {:?}", err)),
-        IResult::Incomplete(_) => panic!("impossible happened"),
+        IResult::Done(rest, ref t) if rest.is_empty() => Ok(t.clone()),
+        IResult::Error(err) => Err(format!("{:?}", err)),
+        _ => panic!("impossible happened"),
     }
 }
 
 named!(program (&[u8]) -> Program, complete!(
     chain!(
-        stmts: separated_list!(semi, statement) ~
         multispace? ~
+        stmts: separated_list!(semi, statement) ~
         eof,
         || Program(stmts)
     )
@@ -90,7 +83,7 @@ named!(do_expr3 (&[u8]) -> Expr, complete!(
                     Box::new(rhs.clone())
                 )
             )
-        )) ,
+        )),
         || expr
     )
 ));
@@ -107,22 +100,47 @@ named!(ident_expr (&[u8]) -> Expr, map!(identifier, Expr::Ident));
 
 named!(identifier (&[u8]) -> String,
     chain!(
-        multispace? ~
         ident: map_res!(
-            map_res!(alpha, std::str::from_utf8),
-            std::str::FromStr::from_str) ,
+            map_res!(
+                _identifier,
+                std::str::from_utf8),
+            std::str::FromStr::from_str) ~
+        multispace?,
         || ident
     )
 );
 
-named!(number( &[u8] ) -> i32,
+
+fn _identifier<'a, T: ?Sized>(input: &'a T) -> IResult<&'a T, &'a T>
+    where T: Index<Range<usize>, Output = T> + Index<RangeFrom<usize>, Output = T>,
+          &'a T: IterIndices + InputLength
+{
+    let input_length = input.input_len();
+    if input_length == 0 {
+        return IResult::Error(Err::Position(ErrorKind::Custom(6), input));
+    }
+
+    for (idx, item) in input.iter_indices() {
+        let c = item.as_char() as u8;
+        if !(is_alphanumeric(c) || c == '_' as u8) || (is_digit(c) && idx == 0) {
+            if idx == 0 {
+                return IResult::Error(Err::Position(ErrorKind::Custom(6), input));
+            } else {
+                return IResult::Done(&input[idx..], &input[0..idx]);
+            }
+        }
+    }
+    IResult::Done(&input[input_length..], input)
+}
+
+named!(number (&[u8]) -> i32,
     chain!(
-        multispace? ~
         int: map_res!(
             map_res!(
                 digit,
                 std::str::from_utf8),
-            std::str::FromStr::from_str) ,
+            std::str::FromStr::from_str) ~
+        multispace?,
         || int
     )
 );
@@ -130,7 +148,7 @@ named!(number( &[u8] ) -> i32,
 macro_rules! symbol (
     ($name:ident, $s: expr) =>
     (named!($name (&[u8]) -> char,
-    complete!(chain!(multispace? ~ s: char!($s), || s)));)
+    complete!(chain!(s: char!($s) ~ multispace?, || s)));)
 );
 
 symbol!(semi, ';');

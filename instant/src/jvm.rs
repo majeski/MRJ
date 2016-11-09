@@ -1,12 +1,54 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::vec::Vec;
-use std::{cmp, io, mem};
+use std::{cmp, io, mem, vec};
 
-use ast::*;
+use ast::{self, Operator};
 
 type VariableMap = HashMap<String, usize>;
 type VariableSet = HashSet<String>;
+
+pub struct Program(vec::Vec<Stmt>);
+
+enum Stmt {
+    Assign(String, Expr),
+    Expr(Expr),
+}
+
+enum Expr {
+    Const(i32),
+    Ident(String),
+    BinOp(Box<Expr>, Operator, Box<Expr>, bool),
+}
+
+pub fn prepare_ast(p: &ast::Program) -> Program {
+    let mut jvm_stmts = vec::Vec::new();
+    for stmt in &p.0 {
+        jvm_stmts.push(stmt_to_jvm(stmt));
+    }
+
+    Program(jvm_stmts)
+}
+
+fn stmt_to_jvm(stmt: &ast::Stmt) -> Stmt {
+    match *stmt {
+        ast::Stmt::Assign(ref iden, ref e) => Stmt::Assign(iden.clone(), expr_to_jvm(e)),
+        ast::Stmt::Expr(ref e) => Stmt::Expr(expr_to_jvm(e)),
+    }
+}
+
+fn expr_to_jvm(expr: &ast::Expr) -> Expr {
+    match *expr {
+        ast::Expr::Const(x) => Expr::Const(x),
+        ast::Expr::Ident(ref x) => Expr::Ident(x.clone()),
+        ast::Expr::BinOp(ref lhs, op, ref rhs) => {
+            Expr::BinOp(Box::new(expr_to_jvm(lhs)),
+                        op,
+                        Box::new(expr_to_jvm(rhs)),
+                        false)
+        }
+    }
+}
 
 pub fn optimize(program: &mut Program) {
     let Program(ref mut stmts) = *program;
@@ -23,17 +65,13 @@ pub fn optimize(program: &mut Program) {
 // returns stack size
 fn optimize_stack_size(expr: &mut Expr) -> i32 {
     match *expr {
-        Expr::BinOp(ref mut lhs, Operator::Sub, ref mut rhs) |
-        Expr::BinOp(ref mut lhs, Operator::Div, ref mut rhs) => {
-            cmp::max(optimize_stack_size(lhs), optimize_stack_size(rhs) + 1)
-        }
-        Expr::BinOp(ref mut lhs, Operator::Add, ref mut rhs) |
-        Expr::BinOp(ref mut lhs, Operator::Mul, ref mut rhs) => {
+        Expr::BinOp(ref mut lhs, _, ref mut rhs, ref mut reversed) => {
             let mut lsize = optimize_stack_size(lhs);
             let mut rsize = optimize_stack_size(rhs);
             if rsize > lsize {
                 mem::swap(lhs, rhs);
                 mem::swap(&mut lsize, &mut rsize);
+                *reversed = true;
             }
             cmp::max(lsize, rsize + 1)
         }
@@ -128,7 +166,7 @@ impl StackSize for Stmt {
 impl StackSize for Expr {
     fn stack_size(&self) -> i32 {
         match *self {
-            Expr::BinOp(ref lhs, _, ref rhs) => {
+            Expr::BinOp(ref lhs, _, ref rhs, _) => {
                 cmp::max(lhs.deref().stack_size(), rhs.deref().stack_size() + 1)
             }
             _ => 1,
@@ -167,9 +205,12 @@ impl JVMCompile for Expr {
         match *self {
             Expr::Const(x) => x.compile(ctx),
             Expr::Ident(ref x) => load_var(x, ctx),
-            Expr::BinOp(ref lhs, op, ref rhs) => {
+            Expr::BinOp(ref lhs, op, ref rhs, reversed) => {
                 try!(lhs.deref().compile(ctx));
                 try!(rhs.deref().compile(ctx));
+                if reversed {
+                    try!(ctx.out.write_all(b"swap\n"));
+                }
                 try!(op.compile(ctx));
                 Ok(())
             }

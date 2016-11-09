@@ -59,39 +59,45 @@ fn read_file(path: &std::path::Path) -> Result<String, io::Error> {
 fn compile(program: Program, input: &std::path::Path) -> Result<(), io::Error> {
     if cfg!(feature = "jvm") {
         println!("Generating JVM");
-        try!(compile_jvm(program.clone(), input));
+        try!(compile_jvm(&program, input));
     }
     if cfg!(feature = "llvm") {
         println!("Generating LLVM");
-        try!(compile_llvm(program, input));
+        try!(compile_llvm(&program, input));
     }
     Ok(())
 }
 
-fn compile_jvm(mut program: Program, input: &std::path::Path) -> Result<(), io::Error> {
+fn compile_jvm(program: &Program, input: &std::path::Path) -> Result<(), io::Error> {
     let err = "Something is wrong with file path";
     let filename = input.file_stem().expect(err).to_str().expect(err);
     let out_jasmin_path = input.with_file_name(filename.to_string() + ".j");
     let out_class_dir = input.parent().expect(err);
 
     {
-        jvm::optimize(&mut program);
+        let mut jvm_program = jvm::prepare_ast(program);
+        jvm::optimize(&mut jvm_program);
         let mut out_jasmin = std::fs::File::create(&out_jasmin_path).unwrap();
         let mut ctx = jvm::JVMContext::new(&mut out_jasmin);
-        try!(jvm::compile(&program, filename, &mut ctx));
+        try!(jvm::compile(&jvm_program, filename, &mut ctx));
     }
 
-    try!(execute_bash_command(Command::new("java".to_string())
+    let out_class_dir = if out_class_dir.to_str().expect(err).is_empty() {
+        "./"
+    } else {
+        out_class_dir.to_str().expect(err)
+    };
+    try!(execute_bash_command(Command::new("java")
                                   .arg("-jar")
-                                  .arg("lib/jasmin.jar".to_string())
+                                  .arg("lib/jasmin.jar")
                                   .arg("-d")
-                                  .arg(out_class_dir.to_str().expect(err))
+                                  .arg(out_class_dir)
                                   .arg(out_jasmin_path.to_str().expect(err)),
                               "Failed to call jasmin"));
     Ok(())
 }
 
-fn compile_llvm(program: Program, input: &std::path::Path) -> Result<(), io::Error> {
+fn compile_llvm(program: &Program, input: &std::path::Path) -> Result<(), io::Error> {
     let err = "Something is wrong with file path";
     let filename = input.file_stem().expect(err).to_str().expect(err);
     let out_ll_path = input.with_file_name(filename.to_string() + ".ll");
@@ -105,23 +111,22 @@ fn compile_llvm(program: Program, input: &std::path::Path) -> Result<(), io::Err
     }
 
     // compile
-    try!(execute_bash_command(Command::new("llvm-as".to_string())
+    try!(execute_bash_command(Command::new("llvm-as")
                                   .arg(out_ll_path.to_str().expect(err))
                                   .arg("-o")
                                   .arg(out_bc_path_tmp.to_str().expect(err)),
                               "Failed to translate to LLVM bitcode"));
 
     // link
-    try!(execute_bash_command(Command::new("llvm-link".to_string())
+    try!(execute_bash_command(Command::new("llvm-link")
                                   .arg("-o")
                                   .arg(out_bc_path.to_str().expect(err))
                                   .arg(out_bc_path_tmp.to_str().expect(err))
-                                  .arg("lib/runtime.bc".to_string()),
+                                  .arg("lib/runtime.bc"),
                               "Failed to link with runtime.bc"));
 
     // rm temp .bc
-    try!(execute_bash_command(Command::new("rm".to_string())
-                                  .arg(out_bc_path_tmp.to_str().expect(err)),
+    try!(execute_bash_command(Command::new("rm").arg(out_bc_path_tmp.to_str().expect(err)),
                               "Failed to clean up temporary .bc file"));
 
     Ok(())

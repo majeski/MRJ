@@ -10,7 +10,11 @@ pub fn check_vars(program: &Program) -> Result<(), String> {
     program.check_vars(&mut vars)
 }
 
-impl Program {
+trait CheckVars {
+    fn check_vars(&self, vars: &mut VarSet) -> Result<(), String>;
+}
+
+impl CheckVars for Program {
     fn check_vars(&self, vars: &mut VarSet) -> Result<(), String> {
         for stmt in &self.0 {
             try!(stmt.check_vars(vars));
@@ -19,26 +23,27 @@ impl Program {
     }
 }
 
-impl Stmt {
+impl CheckVars for Stmt {
     fn check_vars(&self, vars: &mut VarSet) -> Result<(), String> {
         match *self {
             Stmt::Assign(ref name, ref e) => {
+                try!(e.check_vars(vars));
                 vars.insert(name.clone());
-                e.check_vars(vars)
-            },
-            Stmt::Expr(ref e) => e.check_vars(vars)
+                Ok(())
+            }
+            Stmt::Expr(ref e) => e.check_vars(vars),
         }
     }
 }
 
-impl Expr {
+impl CheckVars for Expr {
     fn check_vars(&self, vars: &mut VarSet) -> Result<(), String> {
         match *self {
             Expr::BinOp(ref lhs, _, ref rhs) => {
-                try!(lhs.deref().check_vars(vars));            
+                try!(lhs.deref().check_vars(vars));
                 try!(rhs.deref().check_vars(vars));
                 Ok(())
-            },
+            }
             Expr::Ident(ref name) => {
                 if !vars.contains(name) {
                     Err(name.clone())
@@ -46,7 +51,7 @@ impl Expr {
                     Ok(())
                 }
             }
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 }
