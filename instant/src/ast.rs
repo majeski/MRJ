@@ -16,7 +16,7 @@ pub enum Expr {
     BinOp(Box<Expr>, Operator, Box<Expr>),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
     Add,
     Sub,

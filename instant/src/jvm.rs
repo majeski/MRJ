@@ -208,7 +208,7 @@ impl JVMCompile for Expr {
             Expr::BinOp(ref lhs, op, ref rhs, reversed) => {
                 try!(lhs.deref().compile(ctx));
                 try!(rhs.deref().compile(ctx));
-                if reversed {
+                if reversed && op != Operator::Add && op != Operator::Mul {
                     try!(ctx.out.write_all(b"swap\n"));
                 }
                 try!(op.compile(ctx));
