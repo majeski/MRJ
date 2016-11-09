@@ -54,10 +54,8 @@ pub fn optimize(program: &mut Program) {
     let Program(ref mut stmts) = *program;
     for stmt in stmts {
         match *stmt {
-            Stmt::Expr(ref mut e) => {
-                optimize_stack_size(e);
-            }
-            _ => {}
+            Stmt::Expr(ref mut e) => optimize_stack_size(e),
+            Stmt::Assign(_, ref mut e) => optimize_stack_size(e),
         };
     }
 }
