@@ -5,9 +5,9 @@ BIN_PATH=./target/release/instant
 # only for students server
 all: cargo
 	RUSTC=$(RUST_PATH) $(CARGO_PATH) build --release --features "jvm"
-	cp target/release/instant insc_jvm
+	cp $(BIN_PATH) insc_jvm
 	RUSTC=$(RUST_PATH) $(CARGO_PATH) build --release --features "llvm"
-	cp target/release/instant insc_llvm
+	cp $(BIN_PATH) insc_llvm
 
 jvm:
 	cargo build --release --features "jvm"
@@ -22,7 +22,7 @@ cargo:
 	git clone --recursive https://github.com/rust-lang/cargo &&\
 	cd cargo &&\
 	python -B src/etc/install-deps.py &&\
-	./configure --local-rust-root="$(PWD)/cargo/rustc" &&\
+	./configure --local-rust-root=rustc &&\
 	make &&\
 	cd ..
 
