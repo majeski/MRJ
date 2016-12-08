@@ -33,7 +33,7 @@ struct def_func_t {
     ret_type: *mut c_char,
     ident: *mut c_char,
     args: *mut many_t,
-    stmt: *mut stmt_t,
+    stmts: *mut many_t,
 }
 
 impl ToAst<Def> for def_func_t {
@@ -41,8 +41,8 @@ impl ToAst<Def> for def_func_t {
         let ret_type: Type = try!(self.ret_type.to_ast());
         let ident: Ident = try!(self.ident.to_ast());
         let args = try!(many_t::to_vec(self.args, func_arg_t::to_ast));
-        let stmt = try!(self.stmt.to_ast());
-        Ok(Def::DFunc(ident, args, ret_type, stmt))
+        let stmts = try!(many_t::to_vec(self.stmts, stmt_t::to_ast));
+        Ok(Def::DFunc(ident, args, ret_type, stmts))
     }
 }
 

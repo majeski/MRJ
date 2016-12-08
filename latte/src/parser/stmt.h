@@ -41,13 +41,13 @@ struct stmt_postfix_t {
 
 struct stmt_if_t {
   struct expr_t *cond;
-  struct stmt_t *if_s;
-  struct stmt_t *else_s;  // nullable
+  struct many_t *if_s;    // stmt_t
+  struct many_t *else_s;  // stmt_t // nullable
 };
 
 struct stmt_while_t {
   struct expr_t *cond;
-  struct stmt_t *s;
+  struct many_t *s;  // stmt_t
 };
 
 extern struct stmt_t *stmt_var_decls_create(char *type, struct many_t *decls);
@@ -58,9 +58,9 @@ extern struct stmt_t *stmt_postfix_create(char *ident, int is_decr);
 extern struct stmt_t *stmt_return_create(struct expr_t *e);
 extern struct stmt_t *stmt_block_create(struct many_t *stmts);
 extern struct stmt_t *stmt_expr_create(struct expr_t *e);
-extern struct stmt_t *stmt_if_create(struct expr_t *cond, struct stmt_t *if_s,
-                                     struct stmt_t *else_s);
-extern struct stmt_t *stmt_while_create(struct expr_t *cond, struct stmt_t *s);
+extern struct stmt_t *stmt_if_create(struct expr_t *cond, struct many_t *if_s,
+                                     struct many_t *else_s);
+extern struct stmt_t *stmt_while_create(struct expr_t *cond, struct many_t *s);
 
 extern void stmt_free(void *s);
 extern void var_decl_free(void *d);

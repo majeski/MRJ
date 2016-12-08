@@ -130,19 +130,19 @@ impl ToAst<Stmt> for stmt_postfix_t {
 #[repr(C)]
 struct stmt_if_t {
     cond: *mut expr_t,
-    if_s: *mut stmt_t,
-    else_s: *mut stmt_t,
+    if_s: *mut many_t,
+    else_s: *mut many_t,
 }
 
 impl ToAst<Stmt> for stmt_if_t {
     fn to_ast(&self) -> TAResult<Stmt> {
         let cond = try!(self.cond.to_ast());
-        let if_s = try!(self.if_s.to_ast());
+        let if_s = try!(many_t::to_vec(self.if_s, stmt_t::to_ast));
         if self.else_s.is_null() {
-            Ok(Stmt::SIf(cond, Box::new(if_s)))
+            Ok(Stmt::SIf(cond, if_s))
         } else {
-            let else_s = try!(self.else_s.to_ast());
-            Ok(Stmt::SIfElse(cond, Box::new(if_s), Box::new(else_s)))
+            let else_s = try!(many_t::to_vec(self.else_s, stmt_t::to_ast));
+            Ok(Stmt::SIfElse(cond, if_s, else_s))
         }
     }
 }
@@ -150,13 +150,13 @@ impl ToAst<Stmt> for stmt_if_t {
 #[repr(C)]
 struct stmt_while_t {
     cond: *mut expr_t,
-    stmt: *mut stmt_t,
+    stmts: *mut many_t,
 }
 
 impl ToAst<Stmt> for stmt_while_t {
     fn to_ast(&self) -> TAResult<Stmt> {
         let cond = try!(self.cond.to_ast());
-        let stmt = try!(self.stmt.to_ast());
-        Ok(Stmt::SWhile(cond, Box::new(stmt)))
+        let stmts = try!(many_t::to_vec(self.stmts, stmt_t::to_ast));
+        Ok(Stmt::SWhile(cond, stmts))
     }
 }

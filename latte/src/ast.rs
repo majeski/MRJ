@@ -3,7 +3,7 @@ pub struct Program(pub Vec<Def>);
 
 #[derive(Debug, Clone)]
 pub enum Def {
-    DFunc(Ident, Vec<FuncArg>, Type, Stmt),
+    DFunc(Ident, Vec<FuncArg>, Type, Vec<Stmt>),
 }
 
 #[derive(Debug, Clone)]
@@ -19,9 +19,9 @@ pub enum Stmt {
     SReturnE(Expr),
     SReturn,
     SExpr(Expr),
-    SIf(Expr, Box<Stmt>),
-    SIfElse(Expr, Box<Stmt>, Box<Stmt>),
-    SWhile(Expr, Box<Stmt>),
+    SIf(Expr, Vec<Stmt>),
+    SIfElse(Expr, Vec<Stmt>, Vec<Stmt>),
+    SWhile(Expr, Vec<Stmt>),
 }
 
 #[derive(Debug, Clone)]

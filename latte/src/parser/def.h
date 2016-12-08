@@ -14,7 +14,7 @@ struct def_func_t {
   char *ret_type;
   char *ident;
   struct many_t *args;  // func_arg_t
-  struct stmt_t *stmt;
+  struct many_t *stmts;
 };
 
 struct func_arg_t {
@@ -26,7 +26,7 @@ extern void def_free(void *def);
 extern void func_arg_free(void *farg);
 
 extern struct def_t *def_func_create(char *ret_type, char *ident,
-                                     struct many_t *args, struct stmt_t *stmt);
+                                     struct many_t *args, struct many_t *stmts);
 
 extern struct func_arg_t *func_arg_create(char *type, char *ident);
 

@@ -5,13 +5,13 @@ const int32_t DEF_TYPE_FUNC = 1;
 struct def_t *def_create(int32_t type, void *def);
 
 struct def_t *def_func_create(char *ret_type, char *ident, struct many_t *args,
-                              struct stmt_t *stmt) {
+                              struct many_t *stmts) {
   struct def_func_t *d = malloc(sizeof(struct def_func_t));
   CHECK_NULL(d);
   d->ret_type = ret_type;
   d->ident = ident;
   d->args = args;
-  d->stmt = stmt;
+  d->stmts = stmts;
   return def_create(DEF_TYPE_FUNC, d);
 }
 
@@ -39,7 +39,7 @@ void def_free(void *ptr) {
     free(def->ret_type);
     free(def->ident);
     many_free(def->args, func_arg_free);
-    stmt_free(def->stmt);
+    many_free(def->stmts, stmt_free);
   } else {
     assert(0);
     exit(-1);

@@ -20,10 +20,12 @@ impl Display for Program {
 
 impl Display for Def {
     fn print(&self, indent: &String) {
+        let inner_indent = format!("{}\t", indent);
         match *self {
-            Def::DFunc(ref f, ref args, ref ret_type, ref stmt) => {
-                println!("{}{} {}({})", indent, ret_type, f, print_vec(args));
-                stmt.print(indent);
+            Def::DFunc(ref f, ref args, ref ret_type, ref stmts) => {
+                println!("{}{} {}({}) {}", indent, ret_type, f, print_vec(args), '{');
+                stmts.print(&inner_indent);
+                println!("{}{}", indent, '}');
             }
         }
     }
@@ -31,13 +33,11 @@ impl Display for Def {
 
 impl Display for Stmt {
     fn print(&self, indent: &String) {
+        let inner_indent = format!("{}\t", indent);
         match *self {
             Stmt::SBlock(ref stmts) => {
                 println!("{}{}", indent, '{');
-                {
-                    let indent = indent.clone() + "\t";
-                    stmts.print(&indent);
-                }
+                stmts.print(&inner_indent);
                 println!("{}{}", indent, '}');
             }
             Stmt::SDecl(ref t, ref inits) => {
@@ -51,19 +51,23 @@ impl Display for Stmt {
             Stmt::SReturnE(ref e) => println!("{}return {};", indent, e),
             Stmt::SReturn => println!("{}return;", indent),
             Stmt::SExpr(ref e) => println!("{}{};", indent, e),
-            Stmt::SIf(ref cond, ref stmt) => {
-                println!("{}if ({})", indent, cond);
-                stmt.print(indent);
+            Stmt::SIf(ref cond, ref stmts) => {
+                println!("{}if ({}) {}", indent, cond, '{');
+                let inner_indent = format!("{}\t", indent);
+                stmts.print(&inner_indent);
+                println!("{}{}", indent, '}');
             }
             Stmt::SIfElse(ref cond, ref if_t, ref if_f) => {
-                println!("{}if ({})", indent, cond);
-                if_t.print(indent);
-                println!("{}else", indent);
-                if_f.print(indent);
+                println!("{}if ({}) {}", indent, cond, '{');
+                if_t.print(&inner_indent);
+                println!("{}{} else {}", indent, '}', '{');
+                if_f.print(&inner_indent);
+                println!("{}{}", indent, '}');
             }
-            Stmt::SWhile(ref cond, ref stmt) => {
-                println!("{}while ({})", indent, cond);
-                stmt.print(indent);
+            Stmt::SWhile(ref cond, ref stmts) => {
+                println!("{}while ({}) {}", indent, cond, '{');
+                stmts.print(&inner_indent);
+                println!("{}{}", indent, '}');
             }
         }
     }

@@ -55,8 +55,8 @@ struct stmt_t *stmt_expr_create(struct expr_t *e) {
   return stmt_create(STMT_TYPE_EXPR, e);
 }
 
-struct stmt_t *stmt_if_create(struct expr_t *cond, struct stmt_t *if_s,
-                              struct stmt_t *else_s) {
+struct stmt_t *stmt_if_create(struct expr_t *cond, struct many_t *if_s,
+                              struct many_t *else_s) {
   struct stmt_if_t *s = malloc(sizeof(struct stmt_if_t));
   CHECK_NULL(s);
   s->cond = cond;
@@ -65,11 +65,11 @@ struct stmt_t *stmt_if_create(struct expr_t *cond, struct stmt_t *if_s,
   return stmt_create(STMT_TYPE_IF, s);
 }
 
-struct stmt_t *stmt_while_create(struct expr_t *cond, struct stmt_t *stmt) {
+struct stmt_t *stmt_while_create(struct expr_t *cond, struct many_t *stmts) {
   struct stmt_while_t *s = malloc(sizeof(struct stmt_while_t));
   CHECK_NULL(s);
   s->cond = cond;
-  s->s = stmt;
+  s->s = stmts;
   return stmt_create(STMT_TYPE_WHILE, s);
 }
 
@@ -111,12 +111,12 @@ void stmt_free(void *ptr) {
   } else if (type == STMT_TYPE_IF) {
     struct stmt_if_t *stmt = (struct stmt_if_t *)s;
     expr_free(stmt->cond);
-    stmt_free(stmt->if_s);
-    stmt_free(stmt->else_s);
+    many_free(stmt->if_s, stmt_free);
+    many_free(stmt->else_s, stmt_free);
   } else if (type == STMT_TYPE_WHILE) {
     struct stmt_while_t *stmt = (struct stmt_while_t *)s;
     expr_free(stmt->cond);
-    stmt_free(stmt->s);
+    many_free(stmt->s, stmt_free);
   } else {
     assert(0);
     exit(-1);

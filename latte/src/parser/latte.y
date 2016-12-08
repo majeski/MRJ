@@ -65,11 +65,12 @@ void yyerror(const char *s);
 %type <f_arg> f_arg "function argument";
 
 %type <many> stmts "list of statements";
+%type <many> block;
 %type <stmt> stmt_block "block of statements";
 %type <stmt> stmt "statement";
 
 %type <many> var_inits;
-%type <var_decl> var_init; /* assign statement */
+%type <var_decl> var_init;
 
 %type <many> exprs "list of expressions";
 %type <expr> expr "expression";
@@ -80,7 +81,7 @@ program: defs { parsed_defs = $1; }
 defs: def { $$ = many_create($1); }
     | def defs { $$ = many_add($1, $2); }
 
-def: TYPE IDENT '(' f_args ')' stmt_block {
+def: TYPE IDENT '(' f_args ')' body {
       $$ = def_func_create($1, $2, $4, $6);
    }
 
@@ -93,6 +94,9 @@ f_arg: TYPE IDENT { $$ = func_arg_create($1, $2); }
 stmt_block: '{' '}' { $$ = stmt_block_create(NULL); }
           |'{' stmts '}' { $$ = stmt_block_create($2); }
 
+body: '{' '}' { $$ = NULL; }
+    | '{' stmts '}' { $$ = $2; }
+
 stmts: stmt { $$ = many_create($1); }
      | stmt stmts { $$ = many_add($1, $2); }
 
@@ -104,11 +108,9 @@ stmt: TYPE var_inits ';' { $$ = stmt_var_decls_create($1, $2); }
     | RETURN expr ';' { $$ = stmt_return_create($2); }
     | stmt_block { $$ = $1; }
     | expr ';' { $$ = stmt_expr_create($1); }
-    | IF '(' expr ')' stmt_block ELSE stmt_block {
-      $$ = stmt_if_create($3, $5, $7);
-    }
-    | IF '(' expr ')' stmt_block { $$ = stmt_if_create($3, $5, NULL); }
-    | WHILE '(' expr ')' stmt_block { $$ = stmt_while_create($3, $5); }
+    | IF '(' expr ')' body ELSE body { $$ = stmt_if_create($3, $5, $7); }
+    | IF '(' expr ')' body { $$ = stmt_if_create($3, $5, NULL); }
+    | WHILE '(' expr ')' body { $$ = stmt_while_create($3, $5); }
 
 var_inits: var_init { $$ = many_create($1); }
          | var_init ',' var_inits { $$ = many_add($1, $3); }
