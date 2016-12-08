@@ -1,0 +1,9 @@
+[package]
+name = "latte"
+version = "0.1.0"
+authors = ["Michał Majewski <mm347108@students.mimuw.edu.pl>"]
+
+build = "build.rs"
+
+[dependencies]
+libc = "0.2.0"
