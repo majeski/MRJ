@@ -25,7 +25,7 @@ pub struct stmt_t {
 }
 
 impl ToAst<Stmt> for stmt_t {
-    fn to_ast(&self) -> Stmt {
+    fn to_ast(&self) -> TAResult<Stmt> {
         unsafe {
             if self.t == STMT_TYPE_VAR_INIT {
                 return (self.ptr as *mut stmt_var_decls_t).to_ast();
@@ -38,16 +38,19 @@ impl ToAst<Stmt> for stmt_t {
             }
             if self.t == STMT_TYPE_RETURN {
                 return if self.ptr.is_null() {
-                    Stmt::SReturn
+                    Ok(Stmt::SReturn)
                 } else {
-                    Stmt::SReturnE((self.ptr as *mut expr_t).to_ast())
+                    let e = try!((self.ptr as *mut expr_t).to_ast());
+                    Ok(Stmt::SReturnE(e))
                 };
             }
             if self.t == STMT_TYPE_BLOCK {
-                return Stmt::SBlock(many_t::to_vec(self.ptr as *mut many_t, stmt_t::to_ast));
+                let stmts = try!(many_t::to_vec(self.ptr as *mut many_t, stmt_t::to_ast));
+                return Ok(Stmt::SBlock(stmts));
             }
             if self.t == STMT_TYPE_EXPR {
-                return Stmt::SExpr((self.ptr as *mut expr_t).to_ast());
+                let e = try!((self.ptr as *mut expr_t).to_ast());
+                return Ok(Stmt::SExpr(e));
             }
             if self.t == STMT_TYPE_IF {
                 return (self.ptr as *mut stmt_if_t).to_ast();
@@ -56,7 +59,7 @@ impl ToAst<Stmt> for stmt_t {
                 return (self.ptr as *mut stmt_while_t).to_ast();
             }
         }
-        panic!("Unknown statement type");
+        Err(format!("Unknown statement type: {}", self.t))
     }
 }
 
@@ -68,10 +71,10 @@ struct stmt_var_decls_t {
 }
 
 impl ToAst<Stmt> for stmt_var_decls_t {
-    fn to_ast(&self) -> Stmt {
-        let t: Type = self.var_type.to_ast();
-        let inits = many_t::to_vec(self.inits, var_decl_t::to_ast);
-        Stmt::SDecl(t, inits)
+    fn to_ast(&self) -> TAResult<Stmt> {
+        let t: Type = try!(self.var_type.to_ast());
+        let inits = try!(many_t::to_vec(self.inits, var_decl_t::to_ast));
+        Ok(Stmt::SDecl(t, inits))
     }
 }
 
@@ -82,14 +85,13 @@ struct var_decl_t {
 }
 
 impl ToAst<VarDecl> for var_decl_t {
-    fn to_ast(&self) -> VarDecl {
-        let ident: Ident = self.ident.to_ast();
-        unsafe {
-            if self.expr.is_null() {
-                return VarDecl::NoInit(ident);
-            } else {
-                return VarDecl::Init(ident, (*self.expr).to_ast());
-            }
+    fn to_ast(&self) -> TAResult<VarDecl> {
+        let ident: Ident = try!(self.ident.to_ast());
+        if self.expr.is_null() {
+            return Ok(VarDecl::NoInit(ident));
+        } else {
+            let e = try!(self.expr.to_ast());
+            return Ok(VarDecl::Init(ident, e));
         }
     }
 }
@@ -101,10 +103,10 @@ struct stmt_assign_t {
 }
 
 impl ToAst<Stmt> for stmt_assign_t {
-    fn to_ast(&self) -> Stmt {
-        let ident: Ident = self.ident.to_ast();
-        let expr = unsafe { (*self.expr).to_ast() };
-        Stmt::SAssign(ident, expr)
+    fn to_ast(&self) -> TAResult<Stmt> {
+        let ident: Ident = try!(self.ident.to_ast());
+        let expr = try!(self.expr.to_ast());
+        Ok(Stmt::SAssign(ident, expr))
     }
 }
 
@@ -115,12 +117,12 @@ struct stmt_postfix_t {
 }
 
 impl ToAst<Stmt> for stmt_postfix_t {
-    fn to_ast(&self) -> Stmt {
-        let ident: Ident = self.ident.to_ast();
+    fn to_ast(&self) -> TAResult<Stmt> {
+        let ident: Ident = try!(self.ident.to_ast());
         match self.is_decr {
-            0 => Stmt::SDec(ident),
-            1 => Stmt::SInc(ident),
-            _ => panic!("unknown postfix operator"),
+            0 => Ok(Stmt::SDec(ident)),
+            1 => Ok(Stmt::SInc(ident)),
+            _ => Err(format!("Unknown postfix operator flag: {}", self.is_decr)),
         }
     }
 }
@@ -133,16 +135,14 @@ struct stmt_if_t {
 }
 
 impl ToAst<Stmt> for stmt_if_t {
-    fn to_ast(&self) -> Stmt {
-        unsafe {
-            let cond = (*self.cond).to_ast();
-            let if_s = (*self.if_s).to_ast();
-            if self.else_s.is_null() {
-                Stmt::SIf(cond, Box::new(if_s))
-            } else {
-                let else_s = (*self.else_s).to_ast();
-                Stmt::SIfElse(cond, Box::new(if_s), Box::new(else_s))
-            }
+    fn to_ast(&self) -> TAResult<Stmt> {
+        let cond = try!(self.cond.to_ast());
+        let if_s = try!(self.if_s.to_ast());
+        if self.else_s.is_null() {
+            Ok(Stmt::SIf(cond, Box::new(if_s)))
+        } else {
+            let else_s = try!(self.else_s.to_ast());
+            Ok(Stmt::SIfElse(cond, Box::new(if_s), Box::new(else_s)))
         }
     }
 }
@@ -154,11 +154,9 @@ struct stmt_while_t {
 }
 
 impl ToAst<Stmt> for stmt_while_t {
-    fn to_ast(&self) -> Stmt {
-        unsafe {
-            let cond = (*self.cond).to_ast();
-            let stmt = (*self.stmt).to_ast();
-            Stmt::SWhile(cond, Box::new(stmt))
-        }
+    fn to_ast(&self) -> TAResult<Stmt> {
+        let cond = try!(self.cond.to_ast());
+        let stmt = try!(self.stmt.to_ast());
+        Ok(Stmt::SWhile(cond, Box::new(stmt)))
     }
 }

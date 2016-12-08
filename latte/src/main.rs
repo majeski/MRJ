@@ -4,7 +4,8 @@ use latte::ast_print::*;
 use latte::parser::run_parser;
 
 fn main() {
-    let p = run_parser();
-    println!("{:?}", p);
-    p.unwrap().print0();
+    match run_parser() {
+        Ok(p) => p.print0(),
+        Err(e) => println!("Parser error: {}", e),
+    }
 }

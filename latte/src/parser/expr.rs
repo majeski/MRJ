@@ -24,10 +24,11 @@ pub struct expr_t {
 }
 
 impl ToAst<Expr> for expr_t {
-    fn to_ast(&self) -> Expr {
+    fn to_ast(&self) -> TAResult<Expr> {
         unsafe {
             if self.t == EXPR_TYPE_IDENT {
-                return Expr::EVar((self.ptr as *mut c_char).to_ast());
+                let var = try!((self.ptr as *mut c_char).to_ast());
+                return Ok(Expr::EVar(var));
             }
             if self.t == EXPR_TYPE_LIT {
                 return (self.ptr as *mut expr_lit_t).to_ast();
@@ -42,27 +43,27 @@ impl ToAst<Expr> for expr_t {
                 return (self.ptr as *mut expr_binop_t).to_ast();
             }
         }
-        panic!("Unknown expression type");
+        return Err(format!("Unknown expression type: {}", self.t));
     }
 }
 
 impl ToAst<Operator> for *mut c_char {
-    fn to_ast(&self) -> Operator {
-        let op_str: String = self.to_ast();
+    fn to_ast(&self) -> TAResult<Operator> {
+        let op_str: String = try!(self.to_ast());
         match op_str.as_ref() {
-            "+" => Operator::OpAdd,
-            "-" => Operator::OpSub,
-            "*" => Operator::OpMul,
-            "/" => Operator::OpDiv,
-            "<" => Operator::OpLess,
-            ">" => Operator::OpGreater,
-            "<=" => Operator::OpLessE,
-            ">=" => Operator::OpGreaterE,
-            "==" => Operator::OpEq,
-            "!=" => Operator::OpNEq,
-            "&&" => Operator::OpAnd,
-            "||" => Operator::OpOr,
-            _ => panic!("unknown operator"),
+            "+" => Ok(Operator::OpAdd),
+            "-" => Ok(Operator::OpSub),
+            "*" => Ok(Operator::OpMul),
+            "/" => Ok(Operator::OpDiv),
+            "<" => Ok(Operator::OpLess),
+            ">" => Ok(Operator::OpGreater),
+            "<=" => Ok(Operator::OpLessE),
+            ">=" => Ok(Operator::OpGreaterE),
+            "==" => Ok(Operator::OpEq),
+            "!=" => Ok(Operator::OpNEq),
+            "&&" => Ok(Operator::OpAnd),
+            "||" => Ok(Operator::OpOr),
+            _ => Err(format!("Unknown operator: {}", op_str)),
         }
     }
 }
@@ -75,11 +76,11 @@ struct expr_binop_t {
 }
 
 impl ToAst<Expr> for expr_binop_t {
-    fn to_ast(&self) -> Expr {
-        let lhs = self.lhs.to_ast();
-        let rhs = self.rhs.to_ast();
-        let op: Operator = self.op.to_ast();
-        Expr::EBinOp(Box::new(lhs), op, Box::new(rhs))
+    fn to_ast(&self) -> TAResult<Expr> {
+        let lhs = try!(self.lhs.to_ast());
+        let rhs = try!(self.rhs.to_ast());
+        let op: Operator = try!(self.op.to_ast());
+        Ok(Expr::EBinOp(Box::new(lhs), op, Box::new(rhs)))
     }
 }
 
@@ -90,13 +91,13 @@ struct expr_unary_t {
 }
 
 impl ToAst<Expr> for expr_unary_t {
-    fn to_ast(&self) -> Expr {
+    fn to_ast(&self) -> TAResult<Expr> {
         let op = (self.op as u8) as char;
-        let e = self.expr.to_ast();
+        let e = try!(self.expr.to_ast());
         match op {
-            '-' => Expr::ENeg(Box::new(e)),
-            '!' => Expr::ENot(Box::new(e)),
-            _ => panic!("Unknown unary operator"),
+            '-' => Ok(Expr::ENeg(Box::new(e))),
+            '!' => Ok(Expr::ENot(Box::new(e))),
+            _ => Err(format!("Unknown unary operator: {}", op)),
         }
     }
 }
@@ -108,10 +109,10 @@ struct expr_call_t {
 }
 
 impl ToAst<Expr> for expr_call_t {
-    fn to_ast(&self) -> Expr {
-        let fname: Ident = self.fname.to_ast();
-        let args = many_t::to_vec(self.args, expr_t::to_ast);
-        Expr::ECall(fname, args)
+    fn to_ast(&self) -> TAResult<Expr> {
+        let fname: Ident = try!(self.fname.to_ast());
+        let args = try!(many_t::to_vec(self.args, expr_t::to_ast));
+        Ok(Expr::ECall(fname, args))
     }
 }
 
@@ -122,23 +123,27 @@ struct expr_lit_t {
 }
 
 impl ToAst<Expr> for expr_lit_t {
-    fn to_ast(&self) -> Expr {
-        let lit_str: String = self.lit.to_ast();
+    fn to_ast(&self) -> TAResult<Expr> {
+        let lit_str: String = try!(self.lit.to_ast());
         let lit = unsafe {
             if self.t == EXPR_TYPE_LIT_INT {
-                Lit::LInt(lit_str.parse().expect("int literal err"))
+                let x = try!(match lit_str.parse::<i32>() {
+                    Ok(x) => Ok(x),
+                    Err(x) => Err(format!("Cannot convert {} to i32: {}", lit_str, x)),
+                });
+                Lit::LInt(x)
             } else if self.t == EXPR_TYPE_LIT_STR {
                 Lit::LString(lit_str)
             } else if self.t == EXPR_TYPE_LIT_BOOL {
                 match lit_str.as_ref() {
                     "true" => Lit::LTrue,
                     "false" => Lit::LFalse,
-                    _ => panic!("unknown boolean literal"),
+                    _ => return Err(format!("Unknown boolean literal: {}", lit_str)),
                 }
             } else {
-                panic!("uknown literal type")
+                return Err(format!("Unknown literal type: {}", self.t));
             }
         };
-        Expr::ELit(lit)
+        Ok(Expr::ELit(lit))
     }
 }

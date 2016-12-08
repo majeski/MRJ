@@ -18,12 +18,12 @@ pub struct def_t {
 }
 
 impl ToAst<Def> for def_t {
-    fn to_ast(&self) -> Def {
+    fn to_ast(&self) -> TAResult<Def> {
         unsafe {
             if self.t == DEF_TYPE_FUNC {
                 return (self.ptr as *mut def_func_t).to_ast();
             }
-            panic!("unknown definition type");
+            Err(format!("Unknown definition type: {}", self.t))
         }
     }
 }
@@ -37,12 +37,12 @@ struct def_func_t {
 }
 
 impl ToAst<Def> for def_func_t {
-    fn to_ast(&self) -> Def {
-        let ret_type: Type = self.ret_type.to_ast();
-        let ident: Ident = self.ident.to_ast();
-        let args = many_t::to_vec(self.args, func_arg_t::to_ast);
-        let stmt = self.stmt.to_ast();
-        Def::DFunc(ident, args, ret_type, stmt)
+    fn to_ast(&self) -> TAResult<Def> {
+        let ret_type: Type = try!(self.ret_type.to_ast());
+        let ident: Ident = try!(self.ident.to_ast());
+        let args = try!(many_t::to_vec(self.args, func_arg_t::to_ast));
+        let stmt = try!(self.stmt.to_ast());
+        Ok(Def::DFunc(ident, args, ret_type, stmt))
     }
 }
 
@@ -53,9 +53,9 @@ struct func_arg_t {
 }
 
 impl ToAst<FuncArg> for func_arg_t {
-    fn to_ast(&self) -> FuncArg {
-        let var_type: Type = self.var_type.to_ast();
-        let ident: Ident = self.ident.to_ast();
-        FuncArg(var_type, ident)
+    fn to_ast(&self) -> TAResult<FuncArg> {
+        let var_type: Type = try!(self.var_type.to_ast());
+        let ident: Ident = try!(self.ident.to_ast());
+        Ok(FuncArg(var_type, ident))
     }
 }

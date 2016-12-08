@@ -23,15 +23,15 @@ extern "C" {
     static parsed_defs: *mut many_t;
 }
 
-pub fn run_parser() -> Option<Program> {
-    println!("start!");
+pub fn run_parser() -> Result<Program, String> {
     if unsafe { parse() } != 0 {
-        return None;
+        return Err(format!("error in C code"));
     }
 
-    let program = Program(many_t::to_vec(unsafe { parsed_defs }, def_t::to_ast));
+    let defs = many_t::to_vec(unsafe { parsed_defs }, def_t::to_ast);
     unsafe {
         free_parsed_defs();
     }
-    Some(program)
+
+    defs.map(Program)
 }
