@@ -18,8 +18,7 @@ impl fmt::Display for Program {
 // Display adds indentation to standard fmt::Display
 trait Display {
     fn print0(&self, dst: &mut fmt::Write) {
-        let indent = String::new();
-        self.print(&indent, dst);
+        self.print(&String::new(), dst);
     }
 
     fn print(&self, indent: &String, dst: &mut fmt::Write);
