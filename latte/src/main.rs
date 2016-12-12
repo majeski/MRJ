@@ -5,7 +5,7 @@ use latte::parser::run_parser;
 
 fn main() {
     match run_parser() {
-        Ok(p) => p.print0(),
+        Ok(ref p) => print_code(p),
         Err(e) => println!("Parser error: {}", e),
     }
 }

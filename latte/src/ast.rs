@@ -48,7 +48,7 @@ pub enum Lit {
     LString(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Operator {
     OpAdd,
     OpSub,
@@ -64,7 +64,7 @@ pub enum Operator {
     OpOr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Ident(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq)]

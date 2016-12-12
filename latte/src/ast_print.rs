@@ -2,83 +2,118 @@ use std::fmt;
 
 use ast::*;
 
-pub trait Display {
-    fn print0(&self) {
-        let indent = String::from("");
-        self.print(&indent);
+static FERR: &'static str = "Unexpected format error";
+
+pub fn print_code(p: &Program) {
+    print!("{}", p);
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.print0(f);
+        Ok(())
+    }
+}
+
+// Display adds indentation to standard fmt::Display
+trait Display {
+    fn print0(&self, dst: &mut fmt::Write) {
+        let indent = String::new();
+        self.print(&indent, dst);
     }
 
-    fn print(&self, indent: &String);
+    fn print(&self, indent: &String, dst: &mut fmt::Write);
 }
 
 impl Display for Program {
-    fn print(&self, indent: &String) {
+    fn print(&self, indent: &String, dst: &mut fmt::Write) {
         let Program(ref defs) = *self;
-        defs.print(indent);
+        defs.print(indent, dst);
+    }
+}
+
+impl fmt::Display for Def {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.print0(f);
+        Ok(())
     }
 }
 
 impl Display for Def {
-    fn print(&self, indent: &String) {
+    fn print(&self, indent: &String, dst: &mut fmt::Write) {
         let inner_indent = format!("{}\t", indent);
         match *self {
             Def::DFunc(ref f, ref args, ref ret_type, ref stmts) => {
-                println!("{}{} {}({}) {}", indent, ret_type, f, print_vec(args), '{');
-                stmts.print(&inner_indent);
-                println!("{}{}", indent, '}');
+                writeln!(dst,
+                         "{}{} {}({}) {}",
+                         indent,
+                         ret_type,
+                         f,
+                         print_vec(args),
+                         '{')
+                    .expect(FERR);
+                stmts.print(&inner_indent, dst);
+                writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
         }
     }
 }
 
+impl fmt::Display for Stmt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.print0(f);
+        Ok(())
+    }
+}
+
 impl Display for Stmt {
-    fn print(&self, indent: &String) {
+    fn print(&self, indent: &String, dst: &mut fmt::Write) {
         let inner_indent = format!("{}\t", indent);
         match *self {
             Stmt::SBlock(ref stmts) => {
-                println!("{}{}", indent, '{');
-                stmts.print(&inner_indent);
-                println!("{}{}", indent, '}');
+                writeln!(dst, "{}{}", indent, '{').expect(FERR);
+                stmts.print(&inner_indent, dst);
+                writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
             Stmt::SDecl(ref t, ref inits) => {
-                println!("{}{} {};", indent, t, print_vec(inits));
+                writeln!(dst, "{}{} {};", indent, t, print_vec(inits)).expect(FERR)
             }
-            Stmt::SAssign(ref i, ref e) => {
-                println!("{}{} = {};", indent, i, e);
-            }
-            Stmt::SInc(ref i) => println!("{}{}++;", indent, i),
-            Stmt::SDec(ref i) => println!("{}{}--;", indent, i),
-            Stmt::SReturnE(ref e) => println!("{}return {};", indent, e),
-            Stmt::SReturn => println!("{}return;", indent),
-            Stmt::SExpr(ref e) => println!("{}{};", indent, e),
+
+            Stmt::SAssign(ref i, ref e) => writeln!(dst, "{}{} = {};", indent, i, e).expect(FERR),
+
+            Stmt::SInc(ref i) => writeln!(dst, "{}{}++;", indent, i).expect(FERR),
+            Stmt::SDec(ref i) => writeln!(dst, "{}{}--;", indent, i).expect(FERR),
+            Stmt::SReturnE(ref e) => writeln!(dst, "{}return {};", indent, e).expect(FERR),
+            Stmt::SReturn => writeln!(dst, "{}return;", indent).expect(FERR),
+            Stmt::SExpr(ref e) => writeln!(dst, "{}{};", indent, e).expect(FERR),
             Stmt::SIf(ref cond, ref stmts) => {
-                println!("{}if ({}) {}", indent, cond, '{');
+                writeln!(dst, "{}if ({}) {}", indent, cond, '{').expect(FERR);
                 let inner_indent = format!("{}\t", indent);
-                stmts.print(&inner_indent);
-                println!("{}{}", indent, '}');
+                stmts.print(&inner_indent, dst);
+                writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
             Stmt::SIfElse(ref cond, ref if_t, ref if_f) => {
-                println!("{}if ({}) {}", indent, cond, '{');
-                if_t.print(&inner_indent);
-                println!("{}{} else {}", indent, '}', '{');
-                if_f.print(&inner_indent);
-                println!("{}{}", indent, '}');
+                writeln!(dst, "{}if ({}) {}", indent, cond, '{').expect(FERR);
+                if_t.print(&inner_indent, dst);
+                writeln!(dst, "{}{} else {}", indent, '}', '{').expect(FERR);
+                if_f.print(&inner_indent, dst);
+                writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
             Stmt::SWhile(ref cond, ref stmts) => {
-                println!("{}while ({}) {}", indent, cond, '{');
-                stmts.print(&inner_indent);
-                println!("{}{}", indent, '}');
+                writeln!(dst, "{}while ({}) {}", indent, cond, '{').expect(FERR);
+                stmts.print(&inner_indent, dst);
+                writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
-        }
+        };
     }
 }
 
 impl<T> Display for Vec<T>
     where T: Display
 {
-    fn print(&self, indent: &String) {
+    fn print(&self, indent: &String, dst: &mut fmt::Write) {
         for x in self {
-            x.print(indent);
+            x.print(indent, dst);
         }
     }
 }
@@ -140,7 +175,7 @@ impl fmt::Display for Type {
             Type::TString => "string",
             Type::TBool => "boolean",
             Type::TVoid => "void",
-            _ => "?type?",
+            Type::TFunc(_, _) => "<func_type>",
         };
         write!(f, "{}", s)
     }
