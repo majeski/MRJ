@@ -6,6 +6,23 @@ pub enum Def {
     DFunc(Ident, Vec<FuncArg>, Type, Vec<Stmt>),
 }
 
+impl Def {
+    pub fn get_ident(&self) -> &Ident {
+        match *self {
+            Def::DFunc(ref fname, _, _, _) => fname,
+        }
+    }
+
+    pub fn get_type(&self) -> Type {
+        match *self {
+            Def::DFunc(_, ref args, ref ret_type, _) => {
+                Type::TFunc(args.iter().map(|a| a.0.clone()).collect(),
+                            Box::new(ret_type.clone()))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FuncArg(pub Type, pub Ident);
 

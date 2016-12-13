@@ -52,7 +52,7 @@ impl Display for Def {
                          '{')
                     .expect(FERR);
                 stmts.print(&inner_indent, dst);
-                writeln!(dst, "{}{}", indent, '}').expect(FERR);
+                writeln!(dst, "{}{}\n", indent, '}').expect(FERR);
             }
         }
     }
