@@ -16,10 +16,10 @@ pub struct TypeError {
 
 impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(writeln!(f, "{}", self.err));
+        writeln!(f, "{}", self.err)?;
         for place in &self.stack {
-            try!(writeln!(f, "in:"));
-            try!(write!(f, "{}", place));
+            writeln!(f, "in:")?;
+            write!(f, "{}", place)?;
         }
         Ok(())
     }
@@ -161,7 +161,7 @@ impl<'a> HasType<&'a TypeContext> for Program {
         }
 
         for def in defs {
-            try!(def.check_types(&new_ctx));
+            def.check_types(&new_ctx)?;
         }
         Ok(Type::TVoid)
     }
@@ -186,9 +186,9 @@ impl<'a> HasType<&'a TypeContext> for Def {
             Def::DFunc(_, ref args, ref ret_type, ref stmts) => {
                 let mut new_ctx = ctx.new_function_scope(ret_type);
                 for arg in args {
-                    try!(introduce_name(&arg.1, &arg.0, &mut new_ctx));
+                    introduce_name(&arg.1, &arg.0, &mut new_ctx)?;
                 }
-                try!(stmts.check_types(&mut new_ctx));
+                stmts.check_types(&mut new_ctx)?;
                 Ok(ret_type.clone())
             }
         }
@@ -198,7 +198,7 @@ impl<'a> HasType<&'a TypeContext> for Def {
 impl<'a> HasType<&'a mut TypeContext> for Vec<Stmt> {
     fn do_check_types(&self, ctx: &mut TypeContext) -> TypeResult {
         for x in self {
-            try!(x.check_types(ctx));
+            x.check_types(ctx)?;
         }
         Ok(Type::TVoid)
     }
@@ -213,47 +213,47 @@ impl<'a> HasType<&'a mut TypeContext> for Stmt {
         match *self {
             Stmt::SBlock(ref stmts) => {
                 let mut new_ctx = ctx.new_scope();
-                try!(stmts.check_types(&mut new_ctx));
+                stmts.check_types(&mut new_ctx)?;
             }
             Stmt::SDecl(ref t, ref decls) => {
                 for decl in decls {
-                    try!(decl.introduce_var(t, ctx));
+                    decl.introduce_var(t, ctx)?;
                 }
             }
             Stmt::SAssign(ref ident, ref expr) => {
-                let itype = try!(get_type(ident, ctx));
-                let etype = try!(expr.check_types(ctx));
-                try!(expect_type(itype, etype));
+                let itype = get_type(ident, ctx)?;
+                let etype = expr.check_types(ctx)?;
+                expect_type(itype, etype)?;
             }
             Stmt::SInc(ref ident) |
             Stmt::SDec(ref ident) => {
-                let itype = try!(get_type(ident, ctx));
-                try!(expect_type(Type::TInt, itype));
+                let itype = get_type(ident, ctx)?;
+                expect_type(Type::TInt, itype)?;
             }
             Stmt::SReturnE(ref expr) => {
-                let etype = try!(expr.check_types(ctx));
-                try!(expect_type(ctx.ret_type.clone(), etype));
+                let etype = expr.check_types(ctx)?;
+                expect_type(ctx.ret_type.clone(), etype)?;
             }
             Stmt::SReturn => {
-                try!(expect_type(ctx.ret_type.clone(), Type::TVoid));
+                expect_type(ctx.ret_type.clone(), Type::TVoid)?;
             }
             Stmt::SExpr(ref expr) => {
-                try!(expr.check_types(ctx));
+                expr.check_types(ctx)?;
             }
             Stmt::SIf(ref expr, ref stmts) |
             Stmt::SWhile(ref expr, ref stmts) => {
-                let etype = try!(expr.check_types(ctx));
-                try!(expect_type(Type::TBool, etype));
+                let etype = expr.check_types(ctx)?;
+                expect_type(Type::TBool, etype)?;
                 let mut new_ctx = ctx.new_scope();
-                try!(stmts.check_types(&mut new_ctx));
+                stmts.check_types(&mut new_ctx)?;
             }
             Stmt::SIfElse(ref expr, ref if_t, ref if_f) => {
-                let etype = try!(expr.check_types(ctx));
-                try!(expect_type(Type::TBool, etype));
+                let etype = expr.check_types(ctx)?;
+                expect_type(Type::TBool, etype)?;
                 let mut new_ctx = ctx.new_scope();
-                try!(if_t.check_types(&mut new_ctx));
+                if_t.check_types(&mut new_ctx)?;
                 new_ctx = ctx.new_scope();
-                try!(if_f.check_types(&mut new_ctx));
+                if_f.check_types(&mut new_ctx)?;
             }
         };
         Ok(Type::TVoid)
@@ -268,12 +268,12 @@ impl<'a> IntroducesVar<&'a mut TypeContext> for VarDecl {
     fn do_introduce_var(&self, t: &Type, ctx: &mut TypeContext) -> TypeResult {
         match *self {
             VarDecl::Init(ref ident, ref expr) => {
-                let etype = try!(expr.check_types(ctx));
-                try!(expect_type(t.clone(), etype));
-                try!(introduce_name(ident, t, ctx));
+                let etype = expr.check_types(ctx)?;
+                expect_type(t.clone(), etype)?;
+                introduce_name(ident, t, ctx)?;
             }
             VarDecl::NoInit(ref ident) => {
-                try!(introduce_name(ident, t, ctx));
+                introduce_name(ident, t, ctx)?;
             }
         };
         Ok(Type::TVoid)
@@ -282,7 +282,7 @@ impl<'a> IntroducesVar<&'a mut TypeContext> for VarDecl {
 
 impl<'a> HasType<&'a TypeContext> for Expr {
     fn check_types(&self, ctx: &TypeContext) -> TypeResult {
-        self.do_check_types(ctx).map_err(|e| TypeError::wrapped(e, &format!("{}\n", self)))
+        self.do_check_types(ctx).map_err(|e| e.wrapped(&format!("{}\n", self)))
     }
 
     fn do_check_types(&self, ctx: &TypeContext) -> TypeResult {
@@ -290,33 +290,33 @@ impl<'a> HasType<&'a TypeContext> for Expr {
             Expr::EVar(ref ident) => get_type(ident, ctx),
             Expr::ELit(ref l) => l.check_types(ctx),
             Expr::ECall(ref f, ref args) => check_call_types(f, args, ctx),
-            Expr::ENeg(ref e) => expect_type(Type::TInt, try!(e.check_types(ctx))),
-            Expr::ENot(ref e) => expect_type(Type::TBool, try!(e.check_types(ctx))),
+            Expr::ENeg(ref e) => expect_type(Type::TInt, e.check_types(ctx)?),
+            Expr::ENot(ref e) => expect_type(Type::TBool, e.check_types(ctx)?),
             Expr::EBinOp(ref lhs, ref op, ref rhs) => {
-                let lhs_t = try!(lhs.check_types(ctx));
-                let rhs_t = try!(rhs.check_types(ctx));
+                let lhs_t = lhs.check_types(ctx)?;
+                let rhs_t = rhs.check_types(ctx)?;
                 match *op {
                     Operator::OpAdd => check_add_types(lhs_t, rhs_t),
                     Operator::OpSub | Operator::OpMul | Operator::OpDiv => {
-                        try!(expect_type(Type::TInt, lhs_t));
-                        try!(expect_type(Type::TInt, rhs_t));
+                        expect_type(Type::TInt, lhs_t)?;
+                        expect_type(Type::TInt, rhs_t)?;
                         Ok(Type::TInt)
                     }
                     Operator::OpLess | Operator::OpLessE | Operator::OpGreater |
                     Operator::OpGreaterE => {
-                        try!(expect_type(Type::TInt, lhs_t));
-                        try!(expect_type(Type::TInt, rhs_t));
+                        expect_type(Type::TInt, lhs_t)?;
+                        expect_type(Type::TInt, rhs_t)?;
                         Ok(Type::TBool)
                     }
                     Operator::OpEq | Operator::OpNEq => {
                         // TODO something better?
-                        try!(expect_type(Type::TInt, lhs_t));
-                        try!(expect_type(Type::TInt, rhs_t));
+                        expect_type(Type::TInt, lhs_t)?;
+                        expect_type(Type::TInt, rhs_t)?;
                         Ok(Type::TBool)
                     }
                     Operator::OpOr | Operator::OpAnd => {
-                        try!(expect_type(Type::TBool, lhs_t));
-                        try!(expect_type(Type::TBool, rhs_t));
+                        expect_type(Type::TBool, lhs_t)?;
+                        expect_type(Type::TBool, rhs_t)?;
                         Ok(Type::TBool)
                     }
                 }
@@ -326,12 +326,12 @@ impl<'a> HasType<&'a TypeContext> for Expr {
 }
 
 fn check_call_types(fname: &Ident, args: &Vec<Expr>, ctx: &TypeContext) -> TypeResult {
-    if let Type::TFunc(args_types, ret_type) = try!(get_type(fname, ctx)) {
+    if let Type::TFunc(args_types, ret_type) = get_type(fname, ctx)? {
         if args.len() != args_types.len() {
             return Err(TypeError::invalid_call_arg_num(args_types.len(), args.len()));
         }
         for (index, (expected_type, expr)) in args_types.iter().zip(args).enumerate() {
-            let actual_type = try!(expr.check_types(ctx));
+            let actual_type = expr.check_types(ctx)?;
             if actual_type != *expected_type {
                 return Err(TypeError::invalid_call_arg_type(index, expected_type, actual_type));
             }
