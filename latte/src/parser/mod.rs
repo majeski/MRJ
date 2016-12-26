@@ -11,6 +11,7 @@ use self::to_ast::*;
 mod common;
 mod def;
 mod expr;
+mod field_get;
 mod many;
 mod stmt;
 mod to_ast;

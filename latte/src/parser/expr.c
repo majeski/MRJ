@@ -3,11 +3,12 @@
 const int EXPR_TYPE_BINOP = 1;
 const int EXPR_TYPE_UNARY = 2;
 const int EXPR_TYPE_CALL = 3;
-const int EXPR_TYPE_IDENT = 4;
+const int EXPR_TYPE_FIELD = 4;
 const int EXPR_TYPE_LIT = 5;
 const int EXPR_TYPE_LIT_INT = 100;
 const int EXPR_TYPE_LIT_STR = 101;
 const int EXPR_TYPE_LIT_BOOL = 102;
+const int EXPR_TYPE_LIT_NULL = 103;
 
 struct expr_t *expr_create(int32_t type, void *e);
 
@@ -29,16 +30,16 @@ struct expr_t *expr_unary_create(char op, struct expr_t *expr) {
   return expr_create(EXPR_TYPE_UNARY, e);
 }
 
-struct expr_t *expr_call_create(char *fname, struct many_t *args) {
+struct expr_t *expr_call_create(struct field_get_t *func, struct many_t *args) {
   struct expr_call_t *e = malloc(sizeof(struct expr_call_t));
   CHECK_NULL(e);
-  e->fname = fname;
+  e->func = func;
   e->args = args;
   return expr_create(EXPR_TYPE_CALL, e);
 }
 
-struct expr_t *expr_ident_create(char *ident) {
-  return expr_create(EXPR_TYPE_IDENT, ident);
+struct expr_t *expr_field_get_create(struct field_get_t *field) {
+  return expr_create(EXPR_TYPE_FIELD, field);
 }
 
 struct expr_t *expr_lit_create(int32_t type, char *lit) {
@@ -77,10 +78,10 @@ void expr_free(void *ptr) {
     expr_free(expr->e);
   } else if (type == EXPR_TYPE_CALL) {
     struct expr_call_t *expr = (struct expr_call_t *)e;
-    free(expr->fname);
+    field_get_free(expr->func);
     many_free(expr->args, expr_free);
-  } else if (type == EXPR_TYPE_IDENT) {
-    free(e);
+  } else if (type == EXPR_TYPE_FIELD) {
+    field_get_free(e);
   } else if (type == EXPR_TYPE_LIT) {
     struct expr_lit_t *expr = (struct expr_lit_t *)e;
     free(expr->lit);

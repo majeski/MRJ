@@ -22,6 +22,10 @@ trait Display {
     }
 
     fn print(&self, indent: &String, dst: &mut fmt::Write);
+
+    fn next_indent(indent: &String) -> String {
+        format!("\t{}", indent)
+    }
 }
 
 impl Display for Program {
@@ -40,23 +44,48 @@ impl fmt::Display for Def {
 
 impl Display for Def {
     fn print(&self, indent: &String, dst: &mut fmt::Write) {
-        let inner_indent = format!("{}\t", indent);
         match *self {
-            Def::DFunc(ref f, ref args, ref ret_type, ref stmts) => {
-                writeln!(dst,
-                         "{}{} {}({}) {}",
-                         indent,
-                         ret_type,
-                         f,
-                         print_vec(args),
-                         '{')
-                    .expect(FERR);
-                stmts.print(&inner_indent, dst);
-                writeln!(dst, "{}{}\n", indent, '}').expect(FERR);
-            }
+            Def::DFunc(ref func) => func.print(indent, dst),
+            Def::DClass(ref class) => class.print(indent, dst),
         }
     }
 }
+
+impl Display for Class {
+    fn print(&self, indent: &String, dst: &mut fmt::Write) {
+        let inner_indent = Self::next_indent(indent);
+        let extends = match self.superclass {
+            Some(ref superclass) => format!("extends {} ", superclass),
+            None => format!(""),
+        };
+        writeln!(dst, "{}class {} {}{}", indent, self.name, extends, '{').expect(FERR);
+        for var in &self.vars {
+            writeln!(dst, "{}{};", &inner_indent, var).expect(FERR);
+        }
+        if !self.vars.is_empty() && !self.methods.is_empty() {
+            writeln!(dst, "").expect(FERR);
+        }
+        self.methods.print(&inner_indent, dst);
+        writeln!(dst, "{}{}", indent, '}').expect(FERR);
+    }
+}
+
+impl Display for Func {
+    fn print(&self, indent: &String, dst: &mut fmt::Write) {
+        let inner_indent = Self::next_indent(indent);
+        writeln!(dst,
+                 "{}{} {}({}) {}",
+                 indent,
+                 self.ret_type,
+                 self.ident,
+                 print_vec(&self.args),
+                 '{')
+            .expect(FERR);
+        self.body.print(&inner_indent, dst);
+        writeln!(dst, "{}{}", indent, '}').expect(FERR);
+    }
+}
+
 
 impl fmt::Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -67,7 +96,7 @@ impl fmt::Display for Stmt {
 
 impl Display for Stmt {
     fn print(&self, indent: &String, dst: &mut fmt::Write) {
-        let inner_indent = format!("{}\t", indent);
+        let inner_indent = Self::next_indent(indent);
         match *self {
             Stmt::SBlock(ref stmts) => {
                 writeln!(dst, "{}{}", indent, '{').expect(FERR);
@@ -87,7 +116,6 @@ impl Display for Stmt {
             Stmt::SExpr(ref e) => writeln!(dst, "{}{};", indent, e).expect(FERR),
             Stmt::SIf(ref cond, ref stmts) => {
                 writeln!(dst, "{}if ({}) {}", indent, cond, '{').expect(FERR);
-                let inner_indent = format!("{}\t", indent);
                 stmts.print(&inner_indent, dst);
                 writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
@@ -117,10 +145,9 @@ impl<T> Display for Vec<T>
     }
 }
 
-impl fmt::Display for FuncArg {
+impl fmt::Display for Var {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let FuncArg(ref t, ref ident) = *self;
-        write!(f, "{} {}", t, ident)
+        write!(f, "{} {}", self.t, self.ident)
     }
 }
 
@@ -155,8 +182,19 @@ impl fmt::Display for Lit {
             Lit::LTrue => format!("true"),
             Lit::LFalse => format!("false"),
             Lit::LString(ref s) => format!("\"{}\"", s),
+            Lit::LNull => format!("null"),
         };
         write!(f, "{}", s)
+    }
+}
+
+impl fmt::Display for FieldGet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.ident)?;
+        if let Some(ref field) = self.field {
+            write!(f, ".{}", field)?;
+        }
+        Ok(())
     }
 }
 
@@ -170,11 +208,13 @@ impl fmt::Display for Ident {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match *self {
-            Type::TInt => "int",
-            Type::TString => "string",
-            Type::TBool => "boolean",
-            Type::TVoid => "void",
-            Type::TFunc(_, _) => "<func_type>",
+            Type::TInt => format!("int"),
+            Type::TString => format!("string"),
+            Type::TBool => format!("boolean"),
+            Type::TVoid => format!("void"),
+            Type::TFunc(ref args, ref ret_type) => format!("({}) -> {}", print_vec(args), ret_type),
+            Type::TObject(ref cname) => format!("{}", cname),
+            Type::TNull => format!("<null_type>"),
         };
         write!(f, "{}", s)
     }
@@ -187,6 +227,7 @@ impl fmt::Display for Operator {
             Operator::OpSub => "-",
             Operator::OpMul => "*",
             Operator::OpDiv => "/",
+            Operator::OpMod => "%",
             Operator::OpLess => "<",
             Operator::OpGreater => ">",
             Operator::OpLessE => "<=",

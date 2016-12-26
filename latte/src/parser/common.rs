@@ -7,7 +7,7 @@ use parser::to_ast::*;
 
 impl ToAst<Ident> for *mut c_char {
     fn to_ast(&self) -> TAResult<Ident> {
-        return Ok(Ident(try!(self.to_ast())));
+        return Ok(Ident(self.to_ast()?));
     }
 }
 
@@ -24,13 +24,13 @@ impl ToAst<String> for *mut c_char {
 
 impl ToAst<Type> for *mut c_char {
     fn to_ast(&self) -> TAResult<Type> {
-        let type_str: String = try!(self.to_ast());
+        let type_str: String = self.to_ast()?;
         match type_str.as_ref() {
             "int" => Ok(Type::TInt),
             "string" => Ok(Type::TString),
             "boolean" => Ok(Type::TBool),
             "void" => Ok(Type::TVoid),
-            _ => Err(format!("Unknown type: {}", type_str)),
+            _ => Ok(Type::TObject(Ident(type_str))),
         }
     }
 }

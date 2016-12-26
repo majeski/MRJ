@@ -27,18 +27,18 @@ struct var_decl_t *var_decl_create(char *ident, struct expr_t *e) {
   return d;
 }
 
-struct stmt_t *stmt_assign_create(char *ident, struct expr_t *e) {
+struct stmt_t *stmt_assign_create(struct field_get_t *field, struct expr_t *e) {
   struct stmt_assign_t *s = malloc(sizeof(struct stmt_assign_t));
   CHECK_NULL(s);
-  s->ident = ident;
+  s->field = field;
   s->e = e;
   return stmt_create(STMT_TYPE_ASSIGN, s);
 }
 
-struct stmt_t *stmt_postfix_create(char *ident, int is_decr) {
+struct stmt_t *stmt_postfix_create(struct field_get_t *field, int is_decr) {
   struct stmt_postfix_t *s = malloc(sizeof(struct stmt_postfix_t));
   CHECK_NULL(s);
-  s->ident = ident;
+  s->field = field;
   s->is_decr = is_decr;
   return stmt_create(STMT_TYPE_POSTFIX, s);
 }
@@ -98,10 +98,10 @@ void stmt_free(void *ptr) {
     many_free(stmt->decls, var_decl_free);
   } else if (type == STMT_TYPE_ASSIGN) {
     struct stmt_assign_t *stmt = (struct stmt_assign_t *)s;
-    free(stmt->ident);
+    field_get_free(stmt->field);
   } else if (type == STMT_TYPE_POSTFIX) {
     struct stmt_postfix_t *stmt = (struct stmt_postfix_t *)s;
-    free(stmt->ident);
+    field_get_free(stmt->field);
   } else if (type == STMT_TYPE_RETURN) {
     expr_free(s);
   } else if (type == STMT_TYPE_BLOCK) {

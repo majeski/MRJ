@@ -1,0 +1,7 @@
+void f() {}
+void g() {}
+
+int main() {
+  boolean b = f == g;
+  return 0;
+}

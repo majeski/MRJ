@@ -1,4 +1,4 @@
-OBJECTS = latte.tab.o lex.yy.o common.o def.o expr.o many.o stmt.o
+OBJECTS = latte.tab.o lex.yy.o common.o def.o expr.o field_get.o many.o stmt.o
 CFLAGS = -Wall -std=gnu11
 
 libparse.a: $(OBJECTS)

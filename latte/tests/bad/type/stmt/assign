@@ -1,0 +1,4 @@
+int main() {
+  int a = "asd";
+  return 0;
+}

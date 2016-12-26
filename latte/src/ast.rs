@@ -3,36 +3,52 @@ pub struct Program(pub Vec<Def>);
 
 #[derive(Debug, Clone)]
 pub enum Def {
-    DFunc(Ident, Vec<FuncArg>, Type, Vec<Stmt>),
+    DClass(Class),
+    DFunc(Func),
 }
 
-impl Def {
-    pub fn get_ident(&self) -> &Ident {
-        match *self {
-            Def::DFunc(ref fname, _, _, _) => fname,
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct Class {
+    pub name: Ident,
+    pub superclass: Option<Ident>,
+    pub vars: Vec<Var>,
+    pub methods: Vec<Func>,
+}
 
+#[derive(Debug, Clone)]
+pub struct Func {
+    pub ident: Ident,
+    pub args: Vec<Var>,
+    pub ret_type: Type,
+    pub body: Vec<Stmt>,
+}
+
+impl Func {
     pub fn get_type(&self) -> Type {
-        match *self {
-            Def::DFunc(_, ref args, ref ret_type, _) => {
-                Type::TFunc(args.iter().map(|a| a.0.clone()).collect(),
-                            Box::new(ret_type.clone()))
-            }
-        }
+        Type::TFunc(self.args.iter().map(|v| v.t.clone()).collect(),
+                    Box::new(self.ret_type.clone()))
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct FuncArg(pub Type, pub Ident);
+pub struct Var {
+    pub t: Type,
+    pub ident: Ident,
+}
+
+impl Var {
+    pub fn get_type(&self) -> Type {
+        self.t.clone()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
     SBlock(Vec<Stmt>),
     SDecl(Type, Vec<VarDecl>),
-    SAssign(Ident, Expr),
-    SInc(Ident),
-    SDec(Ident),
+    SAssign(FieldGet, Expr),
+    SInc(FieldGet),
+    SDec(FieldGet),
     SReturnE(Expr),
     SReturn,
     SExpr(Expr),
@@ -49,9 +65,9 @@ pub enum VarDecl {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    EVar(Ident),
+    EVar(FieldGet),
     ELit(Lit),
-    ECall(Ident, Vec<Expr>),
+    ECall(FieldGet, Vec<Expr>),
     ENeg(Box<Expr>),
     ENot(Box<Expr>),
     EBinOp(Box<Expr>, Operator, Box<Expr>),
@@ -63,6 +79,7 @@ pub enum Lit {
     LTrue,
     LFalse,
     LString(String),
+    LNull,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -71,6 +88,7 @@ pub enum Operator {
     OpSub,
     OpMul,
     OpDiv,
+    OpMod,
     OpLess,
     OpGreater,
     OpLessE,
@@ -79,6 +97,12 @@ pub enum Operator {
     OpNEq,
     OpAnd,
     OpOr,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldGet {
+    pub ident: Ident,
+    pub field: Option<Box<FieldGet>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
@@ -91,4 +115,6 @@ pub enum Type {
     TBool,
     TVoid,
     TFunc(Vec<Type>, Box<Type>),
+    TObject(Ident /* class name */),
+    TNull,
 }

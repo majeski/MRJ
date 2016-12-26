@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate either;
 
 pub mod ast;
 pub mod ast_print;

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use ast::{Type, Operator, Ident};
+use ast::{FieldGet, Ident, Operator, Type};
 
 #[derive(Debug)]
 pub struct TypeError {
@@ -25,8 +25,16 @@ impl TypeError {
         self
     }
 
-    pub fn invalid_type(expected: Type, actual: Type) -> TypeError {
+    pub fn invalid_type(expected: &Type, actual: &Type) -> TypeError {
         Self::new(format!("Incorrect type, expected: {}, actual: {}", expected, actual))
+    }
+
+    pub fn non_declarable(t: &Type) -> TypeError {
+        Self::new(format!("Cannot declare variable with type {}", t))
+    }
+
+    pub fn inexistent_type(t: &Type) -> TypeError {
+        Self::new(format!("{} is not a valid type", t))
     }
 
     pub fn no_operator(op: Operator, lhs_t: Type, rhs_t: Type) -> TypeError {
@@ -34,6 +42,7 @@ impl TypeError {
     }
 
     // int main()
+
     pub fn no_main() -> TypeError {
         Self::new(format!("No main function"))
     }
@@ -43,6 +52,7 @@ impl TypeError {
     }
 
     // Identifier
+
     pub fn undefined(ident: &Ident) -> TypeError {
         Self::new(format!("Undefined identifier: {}", ident))
     }
@@ -52,14 +62,10 @@ impl TypeError {
                           ident))
     }
 
-    // Declaration
-    pub fn void_decl() -> TypeError {
-        Self::new(format!("Cannot declare variable with void type"))
-    }
-
     // Function
-    pub fn not_a_function(ident: &Ident) -> TypeError {
-        Self::new(format!("{} is not a function", ident))
+
+    pub fn not_a_function(field: &FieldGet) -> TypeError {
+        Self::new(format!("{} is not a function", field))
     }
 
     pub fn invalid_call_arg_num(expected: usize, actual: usize) -> TypeError {
@@ -75,7 +81,33 @@ impl TypeError {
                           actual))
     }
 
+    // Class
+
+    pub fn name_already_defined(class: &Ident) -> TypeError {
+        Self::new(format!("Cannot define class {}: identifier already defined", class))
+    }
+
+    pub fn field_already_defined(class: &Ident, ident: &Ident) -> TypeError {
+        Self::new(format!("Multiple fields with name {} in class {}", ident, class))
+    }
+
+    pub fn var_override(ident: &Ident) -> TypeError {
+        Self::new(format!("Cannot override variable {}", ident))
+    }
+
+    pub fn invalid_override(ident: &Ident, expected: &Type, actual: &Type) -> TypeError {
+        Self::new(format!("Invalid override of {}. Expected type: {}, actual: {}",
+                          ident,
+                          expected,
+                          actual))
+    }
+
+    pub fn not_an_object(ident: &Ident) -> TypeError {
+        Self::new(format!("{} is not an object", ident))
+    }
+
     // ctor
+
     fn new(msg: String) -> TypeError {
         TypeError {
             err: msg,

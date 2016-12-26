@@ -3,6 +3,7 @@ use libc::*;
 use ast::{Ident, Stmt, Type, VarDecl};
 
 use parser::expr::*;
+use parser::field_get::*;
 use parser::many::*;
 use parser::to_ast::*;
 
@@ -40,16 +41,16 @@ impl ToAst<Stmt> for stmt_t {
                 return if self.ptr.is_null() {
                     Ok(Stmt::SReturn)
                 } else {
-                    let e = try!((self.ptr as *mut expr_t).to_ast());
+                    let e = (self.ptr as *mut expr_t).to_ast()?;
                     Ok(Stmt::SReturnE(e))
                 };
             }
             if self.t == STMT_TYPE_BLOCK {
-                let stmts = try!(many_t::to_vec(self.ptr as *mut many_t, stmt_t::to_ast));
+                let stmts = many_t::to_vec(self.ptr as *mut many_t, stmt_t::to_ast)?;
                 return Ok(Stmt::SBlock(stmts));
             }
             if self.t == STMT_TYPE_EXPR {
-                let e = try!((self.ptr as *mut expr_t).to_ast());
+                let e = (self.ptr as *mut expr_t).to_ast()?;
                 return Ok(Stmt::SExpr(e));
             }
             if self.t == STMT_TYPE_IF {
@@ -72,8 +73,8 @@ struct stmt_var_decls_t {
 
 impl ToAst<Stmt> for stmt_var_decls_t {
     fn to_ast(&self) -> TAResult<Stmt> {
-        let t: Type = try!(self.var_type.to_ast());
-        let inits = try!(many_t::to_vec(self.inits, var_decl_t::to_ast));
+        let t: Type = self.var_type.to_ast()?;
+        let inits = many_t::to_vec(self.inits, var_decl_t::to_ast)?;
         Ok(Stmt::SDecl(t, inits))
     }
 }
@@ -86,11 +87,11 @@ struct var_decl_t {
 
 impl ToAst<VarDecl> for var_decl_t {
     fn to_ast(&self) -> TAResult<VarDecl> {
-        let ident: Ident = try!(self.ident.to_ast());
+        let ident: Ident = self.ident.to_ast()?;
         if self.expr.is_null() {
             return Ok(VarDecl::NoInit(ident));
         } else {
-            let e = try!(self.expr.to_ast());
+            let e = self.expr.to_ast()?;
             return Ok(VarDecl::Init(ident, e));
         }
     }
@@ -98,30 +99,30 @@ impl ToAst<VarDecl> for var_decl_t {
 
 #[repr(C)]
 struct stmt_assign_t {
-    ident: *mut c_char,
+    field: *mut field_get_t,
     expr: *mut expr_t,
 }
 
 impl ToAst<Stmt> for stmt_assign_t {
     fn to_ast(&self) -> TAResult<Stmt> {
-        let ident: Ident = try!(self.ident.to_ast());
-        let expr = try!(self.expr.to_ast());
-        Ok(Stmt::SAssign(ident, expr))
+        let field = self.field.to_ast()?;
+        let expr = self.expr.to_ast()?;
+        Ok(Stmt::SAssign(field, expr))
     }
 }
 
 #[repr(C)]
 struct stmt_postfix_t {
-    ident: *mut c_char,
+    field: *mut field_get_t,
     is_decr: i32,
 }
 
 impl ToAst<Stmt> for stmt_postfix_t {
     fn to_ast(&self) -> TAResult<Stmt> {
-        let ident: Ident = try!(self.ident.to_ast());
+        let field = self.field.to_ast()?;
         match self.is_decr {
-            0 => Ok(Stmt::SDec(ident)),
-            1 => Ok(Stmt::SInc(ident)),
+            0 => Ok(Stmt::SDec(field)),
+            1 => Ok(Stmt::SInc(field)),
             _ => Err(format!("Unknown postfix operator flag: {}", self.is_decr)),
         }
     }
@@ -136,12 +137,12 @@ struct stmt_if_t {
 
 impl ToAst<Stmt> for stmt_if_t {
     fn to_ast(&self) -> TAResult<Stmt> {
-        let cond = try!(self.cond.to_ast());
-        let if_s = try!(many_t::to_vec(self.if_s, stmt_t::to_ast));
+        let cond = self.cond.to_ast()?;
+        let if_s = many_t::to_vec(self.if_s, stmt_t::to_ast)?;
         if self.else_s.is_null() {
             Ok(Stmt::SIf(cond, if_s))
         } else {
-            let else_s = try!(many_t::to_vec(self.else_s, stmt_t::to_ast));
+            let else_s = many_t::to_vec(self.else_s, stmt_t::to_ast)?;
             Ok(Stmt::SIfElse(cond, if_s, else_s))
         }
     }
@@ -155,8 +156,8 @@ struct stmt_while_t {
 
 impl ToAst<Stmt> for stmt_while_t {
     fn to_ast(&self) -> TAResult<Stmt> {
-        let cond = try!(self.cond.to_ast());
-        let stmts = try!(many_t::to_vec(self.stmts, stmt_t::to_ast));
+        let cond = self.cond.to_ast()?;
+        let stmts = many_t::to_vec(self.stmts, stmt_t::to_ast)?;
         Ok(Stmt::SWhile(cond, stmts))
     }
 }

@@ -9,8 +9,11 @@ int line_num = 1;
 
 %START VAR
 %%
+
+"//"[^\n]* ; // comment
+
 \n  line_num++;
-[ \t] ; // whitespace
+[ \t] { BEGIN 0; }; // whitespace
 
 "<=" { BEGIN 0; return LE; }
 ">=" { BEGIN 0; return GE; }
@@ -18,11 +21,12 @@ int line_num = 1;
 "!=" { BEGIN 0; return NEQ; }
 "&&" { BEGIN 0; return AND; }
 "||" { BEGIN 0; return OR; }
-[-+*/%=,;{}()<>] { BEGIN 0; return yytext[0]; }
+[-+*/%=,;{}()<>.] { BEGIN 0; return yytext[0]; }
 
 <VAR>"++" { BEGIN 0; return INCR; }
 <VAR>"--" { BEGIN 0; return DECR; }
 
+null { return LIT_NULL; }
 (true|false) { yylval.str = strdup(yytext); CE; return LIT_BOOL; }
 [0-9]+ { yylval.str = strdup(yytext); CE; return LIT_INT; }
 \"[^"]*\" {
@@ -35,8 +39,10 @@ if { return IF; }
 else { return ELSE; }
 while { return WHILE; }
 return { return RETURN; }
+class { return CLASS; }
+extends { return EXTENDS; }
 
-(int|string|boolean|void) { yylval.str = strdup(yytext); CE; return TYPE; }
+(int|string|boolean|void) { yylval.str = strdup(yytext); CE; return BUILTIN_TYPE; }
 [a-zA-Z_][a-zA-Z_0-9]* { yylval.str = strdup(yytext); CE; BEGIN VAR; return IDENT; }
 . { yylval.str = strdup(yytext); CE; return UNKNOWN; }
 %%

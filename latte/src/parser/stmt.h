@@ -30,12 +30,12 @@ struct var_decl_t {
 };
 
 struct stmt_assign_t {
-  char *ident;
+  struct field_get_t *field;
   struct expr_t *e;
 };
 
 struct stmt_postfix_t {
-  char *ident;
+  struct field_get_t *field;
   int32_t is_decr;
 };
 
@@ -53,8 +53,8 @@ struct stmt_while_t {
 extern struct stmt_t *stmt_var_decls_create(char *type, struct many_t *decls);
 extern struct var_decl_t *var_decl_create(char *ident, struct expr_t *e);
 
-extern struct stmt_t *stmt_assign_create(char *ident, struct expr_t *e);
-extern struct stmt_t *stmt_postfix_create(char *ident, int is_decr);
+extern struct stmt_t *stmt_assign_create(struct field_get_t *field, struct expr_t *e);
+extern struct stmt_t *stmt_postfix_create(struct field_get_t *field, int is_decr);
 extern struct stmt_t *stmt_return_create(struct expr_t *e);
 extern struct stmt_t *stmt_block_create(struct many_t *stmts);
 extern struct stmt_t *stmt_expr_create(struct expr_t *e);

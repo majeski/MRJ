@@ -1,0 +1,12 @@
+class A {
+  int f() {
+    if (2 < 3) {
+    } else {
+      return 1;
+    }
+  }
+}
+
+int main() {
+  return 0;
+}

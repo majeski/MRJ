@@ -7,6 +7,7 @@ pub type Result = std::result::Result<(), Error>;
 
 #[derive(Debug)]
 pub enum Error {
+    Class(String),
     Type(TypeError),
     Return(ReturnError),
 }
@@ -14,6 +15,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::Class(ref e) => writeln!(f, "Error (class hierarchy):\n{}", e),
             Error::Type(ref e) => writeln!(f, "Error (typechecker):\n{}", e),
             Error::Return(ref e) => writeln!(f, "Error (returns):\n{}", e),
         }

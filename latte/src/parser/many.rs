@@ -19,7 +19,7 @@ impl many_t {
         unsafe {
             while !many.is_null() {
                 let ref elem = *((*many).elem as *mut ElemSrcT);
-                let converted = try!(convert(elem));
+                let converted = convert(elem)?;
                 v.push(converted);
                 many = (*many).next;
             }
