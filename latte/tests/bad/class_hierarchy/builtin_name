@@ -1,0 +1,5 @@
+class error {}
+
+int main() {
+  return 0;
+}

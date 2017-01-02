@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use ast::*;
+use builtins::*;
 use static_analysis::type_context::TypeContext;
 use static_analysis::type_error::TypeError;
 
@@ -31,6 +32,10 @@ impl<T: ?Sized, E, Context> HasType<E, Context> for Box<T>
 
 impl<'a> HasType<(), &'a mut TypeContext> for Program {
     fn do_check_types(&self, mut ctx: &mut TypeContext) -> TypeResult<()> {
+        for builtin in get_builtin_functions() {
+            add_ident(&builtin.ident, &builtin.get_type(), &mut ctx)?;
+        }
+
         let (classes, functions) = divide_definitions(&self.0);
         for c in &classes {
             add_class(c, &mut ctx)?;
@@ -185,9 +190,10 @@ impl<'a> HasType<(), &'a TypeContext> for Func {
     fn do_check_types(&self, ctx: &TypeContext) -> TypeResult<()> {
         ctx.in_function_scope(&self.ret_type, |mut ctx| {
             for arg in &self.args {
-                add_ident(&arg.ident, &arg.t, &mut ctx)?;
+                arg.check_types(&mut ctx)?;
             }
-            self.body.check_types(&mut ctx)
+            self.body.check_types(&mut ctx)?;
+            Ok(())
         })
     }
 }

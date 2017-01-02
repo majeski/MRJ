@@ -31,6 +31,19 @@ impl Func {
 }
 
 #[derive(Debug, Clone)]
+pub struct BuiltinFunc {
+    pub ident: Ident,
+    pub args: Vec<Type>,
+    pub ret_type: Type,
+}
+
+impl BuiltinFunc {
+    pub fn get_type(&self) -> Type {
+        Type::TFunc(self.args.clone(), Box::new(self.ret_type.clone()))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Var {
     pub t: Type,
     pub ident: Ident,
