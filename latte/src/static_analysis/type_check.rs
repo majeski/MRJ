@@ -233,7 +233,7 @@ impl<'a> HasType<(), &'a mut TypeContext> for Stmt {
             Stmt::SDecl(ref t, ref decls) => {
                 expect_declarable_type(t, ctx)?;
                 for decl in decls {
-                    decl.introduce_var(t, ctx)?;
+                    decl.check_types(ctx)?;
                 }
             }
             Stmt::SAssign(ref ident, ref expr) => {
@@ -273,19 +273,19 @@ impl<'a> HasType<(), &'a mut TypeContext> for Stmt {
     }
 }
 
-impl VarDecl {
-    fn introduce_var(&self, t: &Type, ctx: &mut TypeContext) -> TypeResult<()> {
-        self.do_introduce_var(t, ctx).map_err(|e| e.wrapped(&format!("{}\n", self)))
+impl<'a> HasType<(), &'a mut TypeContext> for VarDecl {
+    fn check_types(&self, ctx: &mut TypeContext) -> TypeResult<()> {
+        self.do_check_types(ctx).map_err(|e| e.wrapped(&format!("{}\n", self)))
     }
 
-    fn do_introduce_var(&self, t: &Type, ctx: &mut TypeContext) -> TypeResult<()> {
+    fn do_check_types(&self, ctx: &mut TypeContext) -> TypeResult<()> {
         match *self {
-            VarDecl::Init(ref ident, ref expr) => {
+            VarDecl::Init(ref t, ref ident, ref expr) => {
                 let etype = expr.check_types(ctx)?;
                 expect_type(t, &etype, ctx)?;
                 add_ident(ident, t, ctx)?;
             }
-            VarDecl::NoInit(ref ident) => {
+            VarDecl::NoInit(ref t, ref ident) => {
                 add_ident(ident, t, ctx)?;
             }
         };

@@ -74,7 +74,7 @@ struct stmt_var_decls_t {
 impl ToAst<Stmt> for stmt_var_decls_t {
     fn to_ast(&self) -> TAResult<Stmt> {
         let t: Type = self.var_type.to_ast()?;
-        let inits = many_t::to_vec(self.inits, var_decl_t::to_ast)?;
+        let inits = many_t::to_vec(self.inits, |var_decl: &var_decl_t| var_decl.to_ast(&t))?;
         Ok(Stmt::SDecl(t, inits))
     }
 }
@@ -85,14 +85,14 @@ struct var_decl_t {
     expr: *mut expr_t,
 }
 
-impl ToAst<VarDecl> for var_decl_t {
-    fn to_ast(&self) -> TAResult<VarDecl> {
+impl var_decl_t {
+    fn to_ast(&self, t: &Type) -> TAResult<VarDecl> {
         let ident: Ident = self.ident.to_ast()?;
         if self.expr.is_null() {
-            return Ok(VarDecl::NoInit(ident));
+            return Ok(VarDecl::NoInit(t.clone(), ident));
         } else {
             let e = self.expr.to_ast()?;
-            return Ok(VarDecl::Init(ident, e));
+            return Ok(VarDecl::Init(t.clone(), ident, e));
         }
     }
 }

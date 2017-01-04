@@ -72,8 +72,8 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub enum VarDecl {
-    Init(Ident, Expr),
-    NoInit(Ident),
+    Init(Type, Ident, Expr),
+    NoInit(Type, Ident),
 }
 
 #[derive(Debug, Clone)]

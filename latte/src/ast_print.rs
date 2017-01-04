@@ -154,8 +154,8 @@ impl fmt::Display for Var {
 impl fmt::Display for VarDecl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match *self {
-            VarDecl::Init(ref name, ref e) => format!("{} = {}", name, e),
-            VarDecl::NoInit(ref name) => format!("{}", name),
+            VarDecl::Init(_, ref name, ref e) => format!("{} = {}", name, e),
+            VarDecl::NoInit(_, ref name) => format!("{}", name),
         };
         write!(f, "{}", s)
     }
