@@ -139,9 +139,9 @@ stmt: type var_inits ';' { $$ = stmt_var_decls_create($1, $2); }
     | RETURN expr ';' { $$ = stmt_return_create($2); }
     | stmt_block { $$ = $1; }
     | expr ';' { $$ = stmt_expr_create($1); }
-    | IF '(' expr ')' body ELSE body { $$ = stmt_if_create($3, $5, $7); }
-    | IF '(' expr ')' body { $$ = stmt_if_create($3, $5, NULL); }
-    | WHILE '(' expr ')' body { $$ = stmt_while_create($3, $5); }
+    | IF '(' expr ')' stmt ELSE stmt { $$ = stmt_if_create($3, $5, $7); }
+    | IF '(' expr ')' stmt { $$ = stmt_if_create($3, $5, NULL); }
+    | WHILE '(' expr ')' stmt { $$ = stmt_while_create($3, $5); }
 
 var_inits: var_init { $$ = many_create($1); }
          | var_init ',' var_inits { $$ = many_add($1, $3); }

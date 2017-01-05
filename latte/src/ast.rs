@@ -65,9 +65,9 @@ pub enum Stmt {
     SReturnE(Expr),
     SReturn,
     SExpr(Expr),
-    SIf(Expr, Vec<Stmt>),
-    SIfElse(Expr, Vec<Stmt>, Vec<Stmt>),
-    SWhile(Expr, Vec<Stmt>),
+    SIf(Expr, Box<Stmt>),
+    SIfElse(Expr, Box<Stmt>, Box<Stmt>),
+    SWhile(Expr, Box<Stmt>),
 }
 
 #[derive(Debug, Clone)]
