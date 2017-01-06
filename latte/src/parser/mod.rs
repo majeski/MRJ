@@ -1,6 +1,8 @@
 extern crate libc;
 
 use libc::*;
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
 
 use ast::Program;
 
@@ -18,14 +20,14 @@ mod to_ast;
 
 #[link(name = "parse", kind = "static")]
 extern "C" {
-    fn parse() -> c_int;
+    fn parse(fd: c_int) -> c_int;
     fn free_parsed_defs();
 
     static parsed_defs: *mut many_t;
 }
 
-pub fn run_parser() -> Result<Program, String> {
-    if unsafe { parse() } != 0 {
+pub fn run(f: File) -> Result<Program, String> {
+    if unsafe { parse(f.as_raw_fd()) } != 0 {
         return Err(format!("error in C code"));
     }
 

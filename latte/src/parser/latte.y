@@ -4,10 +4,11 @@
 #include <stdlib.h>
 
 extern int yylex();
+extern FILE *yyin;
 extern int yyparse();
 extern int line_num;
 
-extern int parse();
+extern int parse(int input_fd);
 extern void free_parsed_defs();
 extern struct many_t *parsed_defs;
 
@@ -189,16 +190,23 @@ void yyerror(const char *s) {
   printf("line %d: %s\n", line_num, s);
 }
 
-int parse() {
+int parse(int input_fd) {
   parsed_defs = NULL;
+	yyin = fdopen(input_fd, "r");
+	if (yyin == NULL) {
+		printf("[parser] Couldn't open input file");
+		return 1;
+	}
+
   if (yyparse() == 0) {
     if (mem_error) {
-      printf("Memory error");
+      printf("[parser] Memory error");
       parsed_defs = NULL;
       return 1;
     }
+    return 0;
   }
-  return 0;
+  return 1;
 }
 
 void free_parsed_defs() {

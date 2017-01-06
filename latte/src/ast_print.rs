@@ -114,21 +114,33 @@ impl Display for Stmt {
             Stmt::SReturnE(ref e) => writeln!(dst, "{}return {};", indent, e).expect(FERR),
             Stmt::SReturn => writeln!(dst, "{}return;", indent).expect(FERR),
             Stmt::SExpr(ref e) => writeln!(dst, "{}{};", indent, e).expect(FERR),
-            Stmt::SIf(ref cond, ref stmts) => {
+            Stmt::SIf(ref cond, ref stmt) => {
                 writeln!(dst, "{}if ({}) {}", indent, cond, '{').expect(FERR);
-                stmts.print(&inner_indent, dst);
+                match **stmt {
+                    Stmt::SBlock(ref stmts) => stmts.print(&inner_indent, dst),
+                    _ => stmt.print(&inner_indent, dst),	
+                };
                 writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
             Stmt::SIfElse(ref cond, ref if_t, ref if_f) => {
                 writeln!(dst, "{}if ({}) {}", indent, cond, '{').expect(FERR);
-                if_t.print(&inner_indent, dst);
+                match **if_t {
+                    Stmt::SBlock(ref stmts) => stmts.print(&inner_indent, dst),
+                    _ => if_t.print(&inner_indent, dst),	
+                };
                 writeln!(dst, "{}{} else {}", indent, '}', '{').expect(FERR);
-                if_f.print(&inner_indent, dst);
+                match **if_f {
+                    Stmt::SBlock(ref stmts) => stmts.print(&inner_indent, dst),
+                    _ => if_f.print(&inner_indent, dst),	
+                };
                 writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
-            Stmt::SWhile(ref cond, ref stmts) => {
+            Stmt::SWhile(ref cond, ref stmt) => {
                 writeln!(dst, "{}while ({}) {}", indent, cond, '{').expect(FERR);
-                stmts.print(&inner_indent, dst);
+                match **stmt {
+                    Stmt::SBlock(ref stmts) => stmts.print(&inner_indent, dst),
+                    _ => stmt.print(&inner_indent, dst),	
+                };
                 writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
         };

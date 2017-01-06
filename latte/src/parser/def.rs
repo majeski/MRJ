@@ -47,7 +47,7 @@ impl ToAst<Class> for class_t {
     fn to_ast(&self) -> TAResult<Class> {
         let superclass: Option<Ident> = match self.superclass.is_null() {
             true => None,
-            false => Some(self.superclass.to_ast()?)
+            false => Some(self.superclass.to_ast()?),
         };
         let members = many_t::to_vec(self.members, class_member_t::to_ast)?;
         let vars = members.iter()
