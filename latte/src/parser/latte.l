@@ -7,12 +7,17 @@ int line_num = 1;
 #define CE do { if (yylval.str == NULL) mem_error = 1; } while (0)
 %}
 
+%x COMMENT
 %START VAR
 %%
 
-"//"[^\n]* ; // comment
+"/*" BEGIN COMMENT;
+<COMMENT>"*/" BEGIN 0;
+<COMMENT>\n ++line_num;
+<COMMENT>. ;
+"//".* ;
 
-\n  line_num++;
+\n ++line_num;
 [ \t] { BEGIN 0; }; // whitespace
 
 "<=" { BEGIN 0; return LE; }
