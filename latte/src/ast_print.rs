@@ -98,6 +98,7 @@ impl Display for Stmt {
     fn print(&self, indent: &String, dst: &mut fmt::Write) {
         let inner_indent = Self::next_indent(indent);
         match *self {
+            Stmt::SEmpty => {}
             Stmt::SBlock(ref stmts) => {
                 writeln!(dst, "{}{}", indent, '{').expect(FERR);
                 stmts.print(&inner_indent, dst);

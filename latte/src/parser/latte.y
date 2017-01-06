@@ -132,7 +132,8 @@ body: '{' '}' { $$ = NULL; }
 stmts: stmt { $$ = many_create($1); }
      | stmt stmts { $$ = many_add($1, $2); }
 
-stmt: type var_inits ';' { $$ = stmt_var_decls_create($1, $2); }
+stmt: /* empty */ ';' { $$ = stmt_empty_create(); }
+    | type var_inits ';' { $$ = stmt_var_decls_create($1, $2); }
     | field_get '=' expr ';' { $$ = stmt_assign_create($1, $3); }
     | field_get INCR ';' { $$ = stmt_postfix_create($1, 0); }
     | field_get DECR ';' { $$ = stmt_postfix_create($1, 1); }

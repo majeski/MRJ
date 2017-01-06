@@ -8,8 +8,13 @@ const int32_t STMT_TYPE_BLOCK = 4;
 const int32_t STMT_TYPE_EXPR = 5;
 const int32_t STMT_TYPE_IF = 6;
 const int32_t STMT_TYPE_WHILE = 7;
+const int32_t STMT_TYPE_EMPTY = 8;
 
 struct stmt_t *stmt_create(int32_t type, void *s);
+
+struct stmt_t *stmt_empty_create() {
+  return stmt_create(STMT_TYPE_EMPTY, NULL);
+}
 
 struct stmt_t *stmt_var_decls_create(char *type, struct many_t *decls) {
   struct stmt_var_decls_t *s = malloc(sizeof(struct stmt_var_decls_t));
@@ -92,7 +97,9 @@ void stmt_free(void *ptr) {
     goto end;
   }
 
-  if (type == STMT_TYPE_VAR_INIT) {
+  if (type == STMT_TYPE_EMPTY) {
+    // nothing to free
+  } else if (type == STMT_TYPE_VAR_INIT) {
     struct stmt_var_decls_t *stmt = (struct stmt_var_decls_t *)s;
     free(stmt->type);
     many_free(stmt->decls, var_decl_free);

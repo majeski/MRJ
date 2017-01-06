@@ -57,6 +57,7 @@ impl Var {
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    SEmpty,
     SBlock(Vec<Stmt>),
     SDecl(Type, Vec<VarDecl>),
     SAssign(FieldGet, Expr),

@@ -9,6 +9,7 @@ use parser::to_ast::*;
 
 #[link(name = "parse", kind = "static")]
 extern "C" {
+    static STMT_TYPE_EMPTY: c_int;
     static STMT_TYPE_VAR_INIT: c_int;
     static STMT_TYPE_ASSIGN: c_int;
     static STMT_TYPE_POSTFIX: c_int;
@@ -28,6 +29,9 @@ pub struct stmt_t {
 impl ToAst<Stmt> for stmt_t {
     fn to_ast(&self) -> TAResult<Stmt> {
         unsafe {
+            if self.t == STMT_TYPE_EMPTY {
+                return Ok(Stmt::SEmpty);
+            }
             if self.t == STMT_TYPE_VAR_INIT {
                 return (self.ptr as *mut stmt_var_decls_t).to_ast();
             }

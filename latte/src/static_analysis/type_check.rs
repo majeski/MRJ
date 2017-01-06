@@ -227,6 +227,7 @@ impl<'a> HasType<(), &'a mut TypeContext> for Stmt {
 
     fn do_check_types(&self, ctx: &mut TypeContext) -> TypeResult<()> {
         match *self {
+            Stmt::SEmpty => {}
             Stmt::SBlock(ref stmts) => {
                 ctx.in_new_scope(|mut ctx| stmts.check_types(&mut ctx))?;
             }

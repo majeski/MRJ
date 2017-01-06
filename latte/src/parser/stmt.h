@@ -13,10 +13,11 @@ extern const int32_t STMT_TYPE_BLOCK;
 extern const int32_t STMT_TYPE_EXPR;
 extern const int32_t STMT_TYPE_IF;
 extern const int32_t STMT_TYPE_WHILE;
+extern const int32_t STMT_TYPE_EMPTY;
 
 struct stmt_t {
   int32_t type;
-  void *s;
+  void *s; // nullable (empty statement ";")
 };
 
 struct stmt_var_decls_t {
@@ -50,6 +51,7 @@ struct stmt_while_t {
   struct stmt_t *s;
 };
 
+extern struct stmt_t *stmt_empty_create();
 extern struct stmt_t *stmt_var_decls_create(char *type, struct many_t *decls);
 extern struct var_decl_t *var_decl_create(char *ident, struct expr_t *e);
 
