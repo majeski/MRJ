@@ -125,8 +125,8 @@ impl ToAst<Stmt> for stmt_postfix_t {
     fn to_ast(&self) -> TAResult<Stmt> {
         let field = self.field.to_ast()?;
         match self.is_decr {
-            0 => Ok(Stmt::SDec(field)),
-            1 => Ok(Stmt::SInc(field)),
+            0 => Ok(Stmt::SInc(field)),
+            1 => Ok(Stmt::SDec(field)),
             _ => Err(format!("Unknown postfix operator flag: {}", self.is_decr)),
         }
     }

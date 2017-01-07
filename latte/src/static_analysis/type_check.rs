@@ -322,12 +322,7 @@ impl<'a> HasType<Type, &'a TypeContext> for Expr {
                         expect_type(&Type::TInt, &rhs_t, ctx)?;
                         Ok(Type::TBool)
                     }
-                    Operator::OpEq | Operator::OpNEq => {
-                        // TODO something better?
-                        expect_type(&Type::TInt, &lhs_t, ctx)?;
-                        expect_type(&Type::TInt, &rhs_t, ctx)?;
-                        Ok(Type::TBool)
-                    }
+                    Operator::OpEq | Operator::OpNEq => check_eq_types(lhs_t, rhs_t),
                     Operator::OpOr | Operator::OpAnd => {
                         expect_type(&Type::TBool, &lhs_t, ctx)?;
                         expect_type(&Type::TBool, &rhs_t, ctx)?;
@@ -357,10 +352,18 @@ fn check_call_types(ident: &FieldGet, args: &Vec<Expr>, ctx: &TypeContext) -> Ty
 }
 
 fn check_add_types(lhs_t: Type, rhs_t: Type) -> TypeResult<Type> {
-    if (lhs_t != Type::TInt && lhs_t != Type::TString) || lhs_t != rhs_t {
+    if lhs_t != rhs_t || (lhs_t != Type::TInt && lhs_t != Type::TString) {
         Err(TypeError::no_operator(Operator::OpAdd, lhs_t, rhs_t))
     } else {
         Ok(lhs_t)
+    }
+}
+
+fn check_eq_types(lhs_t: Type, rhs_t: Type) -> TypeResult<Type> {
+    if lhs_t != rhs_t || (lhs_t != Type::TInt && lhs_t != Type::TString) {
+        Err(TypeError::no_operator(Operator::OpEq, lhs_t, rhs_t))
+    } else {
+        Ok(Type::TBool)
     }
 }
 

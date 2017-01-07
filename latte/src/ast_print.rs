@@ -107,9 +107,7 @@ impl Display for Stmt {
             Stmt::SDecl(ref t, ref inits) => {
                 writeln!(dst, "{}{} {};", indent, t, print_vec(inits)).expect(FERR)
             }
-
             Stmt::SAssign(ref i, ref e) => writeln!(dst, "{}{} = {};", indent, i, e).expect(FERR),
-
             Stmt::SInc(ref i) => writeln!(dst, "{}{}++;", indent, i).expect(FERR),
             Stmt::SDec(ref i) => writeln!(dst, "{}{}--;", indent, i).expect(FERR),
             Stmt::SReturnE(ref e) => writeln!(dst, "{}return {};", indent, e).expect(FERR),
@@ -119,7 +117,7 @@ impl Display for Stmt {
                 writeln!(dst, "{}if ({}) {}", indent, cond, '{').expect(FERR);
                 match **stmt {
                     Stmt::SBlock(ref stmts) => stmts.print(&inner_indent, dst),
-                    _ => stmt.print(&inner_indent, dst),	
+                    _ => stmt.print(&inner_indent, dst),
                 };
                 writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
