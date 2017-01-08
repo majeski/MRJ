@@ -64,16 +64,18 @@ fn generate_or(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType) 
     ctx.cg.add_jump(lhs_label);
     ctx.cg.add_label(lhs_label);
     let (lhs_val, _) = lhs.generate_code(ctx);
+    let lhs_block = ctx.cg.get_current_label();
     ctx.cg.add_cond_jump(lhs_val, end_label, rhs_label);
 
     ctx.cg.add_label(rhs_label);
     let (rhs_val, _) = rhs.generate_code(ctx);
+    let rhs_block = ctx.cg.get_current_label();
     ctx.cg.add_jump(end_label);
 
     ctx.cg.add_label(end_label);
     let res_reg = ctx.cg.add_phi(CGType::TBool,
-                                 (RegOrInt::Int(1), lhs_label),
-                                 (rhs_val, rhs_label));
+                                 (RegOrInt::Int(1), lhs_block),
+                                 (rhs_val, rhs_block));
     (res_reg, CGType::TBool)
 }
 
@@ -85,16 +87,18 @@ fn generate_and(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType)
     ctx.cg.add_jump(lhs_label);
     ctx.cg.add_label(lhs_label);
     let (lhs_val, _) = lhs.generate_code(ctx);
+    let lhs_block = ctx.cg.get_current_label();
     ctx.cg.add_cond_jump(lhs_val, rhs_label, end_label);
 
     ctx.cg.add_label(rhs_label);
     let (rhs_val, _) = rhs.generate_code(ctx);
+    let rhs_block = ctx.cg.get_current_label();
     ctx.cg.add_jump(end_label);
 
     ctx.cg.add_label(end_label);
     let res_reg = ctx.cg.add_phi(CGType::TBool,
-                                 (RegOrInt::Int(0), lhs_label),
-                                 (rhs_val, rhs_label));
+                                 (RegOrInt::Int(0), lhs_block),
+                                 (rhs_val, rhs_block));
     (res_reg, CGType::TBool)
 }
 
@@ -111,18 +115,13 @@ fn generate_add(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType)
 
 fn generate_neq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType) {
     let (val, t) = generate_eq(lhs, rhs, ctx);
-    (ctx.cg.add_neg(val), t)
+    (ctx.cg.add_not(val), t)
 }
 
 fn generate_eq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType) {
     let (lhs_val, t) = lhs.generate_code(ctx);
     let (rhs_val, _) = rhs.generate_code(ctx);
-    let result = match t {
-        CGType::TInt => ctx.cg.add_int_op(lhs_val, Operator::OpEq, rhs_val),
-        CGType::TString => ctx.cg.add_op(CGType::TString, lhs_val, Operator::OpEq, rhs_val),
-        // TODO
-        _ => unreachable!(),
-    };
+    let result = ctx.cg.add_op(t, lhs_val, Operator::OpEq, rhs_val);
     (result, CGType::TBool)
 }
 

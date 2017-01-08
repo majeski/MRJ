@@ -56,9 +56,6 @@ impl GenerateCode<()> for Stmt {
                 let end_label = ctx.cg.next_label();
 
                 let (cond_val, _) = cond.generate_code(ctx);
-                if cond_val == RegOrInt::Int(0) {
-                    return;
-                }
                 ctx.cg.add_cond_jump(cond_val, if_label, end_label);
 
                 ctx.cg.add_label(if_label);
@@ -74,13 +71,6 @@ impl GenerateCode<()> for Stmt {
                 let has_return = self.has_return();
 
                 let (cond_val, _) = cond.generate_code(ctx);
-                if cond_val == RegOrInt::Int(0) {
-                    ctx.in_new_scope(|ctx| if_false.generate_code(ctx));
-                    return;
-                } else if cond_val == RegOrInt::Int(1) {
-                    ctx.in_new_scope(|ctx| if_true.generate_code(ctx));
-                    return;
-                }
                 ctx.cg.add_cond_jump(cond_val, if_label, else_label);
 
                 ctx.cg.add_label(if_label);
@@ -104,9 +94,6 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_jump(cond_label);
                 ctx.cg.add_label(cond_label);
                 let (cond_val, _) = cond.generate_code(ctx);
-                if cond_val == RegOrInt::Int(0) {
-                    return;
-                }
                 ctx.cg.add_cond_jump(cond_val, body_label, end_label);
 
                 ctx.cg.add_label(body_label);

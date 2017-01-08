@@ -250,6 +250,9 @@ impl<'a> HasType<(), &'a mut TypeContext> for Stmt {
             Stmt::SReturnE(ref expr) => {
                 let etype = expr.check_types(ctx)?;
                 expect_type(ctx.get_ret_type(), &etype, ctx)?;
+                if ctx.get_ret_type() == &Type::TVoid {
+                    return Err(TypeError::return_void_expr());
+                }
             }
             Stmt::SReturn => {
                 expect_type(ctx.get_ret_type(), &Type::TVoid, ctx)?;
@@ -360,7 +363,7 @@ fn check_add_types(lhs_t: Type, rhs_t: Type) -> TypeResult<Type> {
 }
 
 fn check_eq_types(lhs_t: Type, rhs_t: Type) -> TypeResult<Type> {
-    if lhs_t != rhs_t || (lhs_t != Type::TInt && lhs_t != Type::TString) {
+    if lhs_t != rhs_t || (lhs_t != Type::TInt && lhs_t != Type::TString && lhs_t != Type::TBool) {
         Err(TypeError::no_operator(Operator::OpEq, lhs_t, rhs_t))
     } else {
         Ok(Type::TBool)

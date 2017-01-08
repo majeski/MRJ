@@ -26,7 +26,7 @@ int line_num = 1;
 "!=" { BEGIN 0; return NEQ; }
 "&&" { BEGIN 0; return AND; }
 "||" { BEGIN 0; return OR; }
-[-+*/%=,;{}()<>.] { BEGIN 0; return yytext[0]; }
+[-+*/%=,;!{}()<>.] { BEGIN 0; return yytext[0]; }
 
 <VAR>"++" { BEGIN 0; return INCR; }
 <VAR>"--" { BEGIN 0; return DECR; }

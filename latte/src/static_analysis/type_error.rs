@@ -68,6 +68,10 @@ impl TypeError {
         Self::new(format!("{} is not a function", field))
     }
 
+    pub fn return_void_expr() -> TypeError {
+        Self::new(format!("Cannot return expression from void function"))
+    }
+
     pub fn invalid_call_arg_num(expected: usize, actual: usize) -> TypeError {
         Self::new(format!("Function expected {} arguments, but got {}",
                           expected,

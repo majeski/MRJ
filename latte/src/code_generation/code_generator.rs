@@ -9,6 +9,7 @@ pub struct CodeGenerator {
     last_label: i32,
     last_str_const: i32,
     br_last_op: bool,
+    current_label: Label,
 }
 
 impl CodeGenerator {
@@ -19,6 +20,7 @@ impl CodeGenerator {
             last_label: 0,
             last_str_const: 0,
             br_last_op: false,
+            current_label: Label(-1),
         };
 
         cg.add_func_declare(CGType::TString,
@@ -50,24 +52,6 @@ impl CodeGenerator {
     }
 
     pub fn add_op(&mut self, t: CGType, lhs: RegOrInt, op: Operator, rhs: RegOrInt) -> RegOrInt {
-        if let (RegOrInt::Int(l), RegOrInt::Int(r)) = (lhs, rhs) {
-            if r != 0 || (op != Operator::OpDiv && op != Operator::OpMod) {
-                let res = match op {
-                    Operator::OpAdd => l + r,
-                    Operator::OpSub => l - r,
-                    Operator::OpMul => l * r,
-                    Operator::OpDiv => l / r,
-                    Operator::OpMod => l % r,
-                    Operator::OpEq => (l == r) as i32,
-                    Operator::OpLess => (l < r) as i32,
-                    Operator::OpLessE => (l <= r) as i32,
-                    Operator::OpGreater => (l > r) as i32,
-                    Operator::OpGreaterE => (l >= r) as i32,
-                    _ => unreachable!(),
-                };
-                return RegOrInt::Int(res);
-            }
-        }
         let op_str = match op {
             Operator::OpAdd => "add",
             Operator::OpSub => "sub",
@@ -85,16 +69,10 @@ impl CodeGenerator {
     }
 
     pub fn add_neg(&mut self, val: RegOrInt) -> RegOrInt {
-        if let RegOrInt::Int(x) = val {
-            return RegOrInt::Int(-x);
-        }
         self.new_reg(format!("sub i32 0, {}", val))
     }
 
     pub fn add_not(&mut self, val: RegOrInt) -> RegOrInt {
-        if let RegOrInt::Int(x) = val {
-            return RegOrInt::Int(1 - x);
-        }
         self.new_reg(format!("add i1 1, {}", val))
     }
 
@@ -246,6 +224,10 @@ impl CodeGenerator {
     }
 
     // labels & brs
+    pub fn get_current_label(&self) -> Label {
+        self.current_label
+    }
+
     pub fn next_label(&mut self) -> Label {
         self.last_label += 1;
         Label(self.last_label)
@@ -253,6 +235,7 @@ impl CodeGenerator {
 
     pub fn add_label(&mut self, l: Label) {
         self.add_line_no_indent(format!("{}:", l));
+        self.current_label = l;
     }
 
     pub fn add_cond_jump(&mut self, cond: RegOrInt, if_true: Label, if_false: Label) {
