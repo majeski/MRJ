@@ -29,26 +29,25 @@ impl GenerateCode<()> for Stmt {
             Stmt::SAssign(ref ident, ref e) => {
                 let addr_reg = ctx.get_var(get_ident(ident));
                 let (val_reg, _) = e.generate_code(ctx);
-                ctx.cg.add_store(&addr_reg, &val_reg);
+                ctx.cg.add_store(addr_reg, val_reg);
             }
             Stmt::SInc(ref ident) => {
                 let addr_reg = ctx.get_var(get_ident(ident));
-                let mut val_reg = ctx.cg.add_load(&addr_reg);
-                val_reg = ctx.cg.add_int_op(&val_reg, Operator::OpAdd, &RegOrInt::Int(1));
-                ctx.cg.add_store(&addr_reg, &val_reg);
+                let mut val_reg = ctx.cg.add_load(addr_reg);
+                val_reg = ctx.cg.add_int_op(val_reg, Operator::OpAdd, RegOrInt::Int(1));
+                ctx.cg.add_store(addr_reg, val_reg);
             }
             Stmt::SDec(ref ident) => {
                 let addr_reg = ctx.get_var(get_ident(ident));
-                let mut val_reg = ctx.cg.add_load(&addr_reg);
-                val_reg = ctx.cg.add_int_op(&val_reg, Operator::OpSub, &RegOrInt::Int(1));
-                ctx.cg.add_store(&addr_reg, &val_reg);
+                let mut val_reg = ctx.cg.add_load(addr_reg);
+                val_reg = ctx.cg.add_int_op(val_reg, Operator::OpSub, RegOrInt::Int(1));
+                ctx.cg.add_store(addr_reg, val_reg);
             }
             Stmt::SReturnE(ref e) => {
                 let (val, t) = e.generate_code(ctx);
-                ctx.cg.add_return_store(t, &val);
-                ctx.cg.add_return_jump();
+                ctx.cg.add_ret(t, val);
             }
-            Stmt::SReturn => ctx.cg.add_return_jump(),
+            Stmt::SReturn => ctx.cg.add_ret_void(),
             Stmt::SExpr(ref e) => {
                 e.generate_code(ctx);
             }
@@ -60,18 +59,19 @@ impl GenerateCode<()> for Stmt {
                 if cond_val == RegOrInt::Int(0) {
                     return;
                 }
-                ctx.cg.add_cond_jump(&cond_val, &if_label, &end_label);
+                ctx.cg.add_cond_jump(cond_val, if_label, end_label);
 
-                ctx.cg.add_label(&if_label);
+                ctx.cg.add_label(if_label);
                 ctx.in_new_scope(|ctx| s.generate_code(ctx));
-                ctx.cg.add_jump(&end_label);
+                ctx.cg.add_jump(end_label);
 
-                ctx.cg.add_label(&end_label);
+                ctx.cg.add_label(end_label);
             }
             Stmt::SIfElse(ref cond, ref if_true, ref if_false) => {
                 let if_label = ctx.cg.next_label();
                 let else_label = ctx.cg.next_label();
                 let end_label = ctx.cg.next_label();
+                let has_return = self.has_return();
 
                 let (cond_val, _) = cond.generate_code(ctx);
                 if cond_val == RegOrInt::Int(0) {
@@ -81,36 +81,39 @@ impl GenerateCode<()> for Stmt {
                     ctx.in_new_scope(|ctx| if_true.generate_code(ctx));
                     return;
                 }
-                ctx.cg.add_cond_jump(&cond_val, &if_label, &else_label);
+                ctx.cg.add_cond_jump(cond_val, if_label, else_label);
 
-                ctx.cg.add_label(&if_label);
+                ctx.cg.add_label(if_label);
                 ctx.in_new_scope(|ctx| if_true.generate_code(ctx));
-                ctx.cg.add_jump(&end_label);
+                if !has_return {
+                    ctx.cg.add_jump(end_label);
+                }
 
-                ctx.cg.add_label(&else_label);
+                ctx.cg.add_label(else_label);
                 ctx.in_new_scope(|ctx| if_false.generate_code(ctx));
-                ctx.cg.add_jump(&end_label);
-
-                ctx.cg.add_label(&end_label);
+                if !has_return {
+                    ctx.cg.add_jump(end_label);
+                    ctx.cg.add_label(end_label);
+                }
             }
             Stmt::SWhile(ref cond, ref s) => {
                 let cond_label = ctx.cg.next_label();
                 let body_label = ctx.cg.next_label();
                 let end_label = ctx.cg.next_label();
 
-                ctx.cg.add_jump(&cond_label);
-                ctx.cg.add_label(&cond_label);
+                ctx.cg.add_jump(cond_label);
+                ctx.cg.add_label(cond_label);
                 let (cond_val, _) = cond.generate_code(ctx);
                 if cond_val == RegOrInt::Int(0) {
                     return;
                 }
-                ctx.cg.add_cond_jump(&cond_val, &body_label, &end_label);
+                ctx.cg.add_cond_jump(cond_val, body_label, end_label);
 
-                ctx.cg.add_label(&body_label);
+                ctx.cg.add_label(body_label);
                 ctx.in_new_scope(|ctx| s.generate_code(ctx));
-                ctx.cg.add_jump(&cond_label);
+                ctx.cg.add_jump(cond_label);
 
-                ctx.cg.add_label(&end_label);
+                ctx.cg.add_label(end_label);
             }
         }
     }
@@ -130,7 +133,7 @@ impl GenerateCode<()> for VarDecl {
             VarDecl::Init(ref t, ref ident, ref e) => {
                 let addr_reg = ctx.cg.add_alloca(CGType::from(t));
                 let (val_reg, _) = e.generate_code(ctx);
-                ctx.cg.add_store(&addr_reg, &val_reg);
+                ctx.cg.add_store(addr_reg, val_reg);
                 ctx.set_var(ident.clone(), addr_reg);
             }
             VarDecl::NoInit(ref t, ref ident) => {
@@ -143,7 +146,7 @@ impl GenerateCode<()> for VarDecl {
                 };
                 let addr_reg = ctx.cg.add_alloca(CGType::from(t));
                 let (val_reg, _) = Expr::ELit(default_lit).generate_code(ctx);
-                ctx.cg.add_store(&addr_reg, &val_reg);
+                ctx.cg.add_store(addr_reg, val_reg);
                 ctx.set_var(ident.clone(), addr_reg);
             }
         }

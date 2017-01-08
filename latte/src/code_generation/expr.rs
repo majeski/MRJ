@@ -10,18 +10,18 @@ impl GenerateCode<(RegOrInt, CGType)> for Expr {
         match *self {
             Expr::EVar(ref ident) => {
                 let addr_reg = ctx.get_var(get_ident(ident));
-                let val = ctx.cg.add_load(&addr_reg);
+                let val = ctx.cg.add_load(addr_reg);
                 (val, addr_reg.t)
             }
             Expr::ELit(ref lit) => lit.generate_code(ctx),
             Expr::ECall(ref ident, ref args) => generate_call(ident, args, ctx),
             Expr::ENeg(ref e) => {
                 let (val, _) = e.generate_code(ctx);
-                (ctx.cg.add_neg(&val), CGType::TInt)
+                (ctx.cg.add_neg(val), CGType::TInt)
             }
             Expr::ENot(ref e) => {
                 let (val, _) = e.generate_code(ctx);
-                (ctx.cg.add_not(&val), CGType::TBool)
+                (ctx.cg.add_not(val), CGType::TBool)
             }
             Expr::EBinOp(ref lhs, Operator::OpOr, ref rhs) => generate_or(lhs, rhs, ctx),
             Expr::EBinOp(ref lhs, Operator::OpAnd, ref rhs) => generate_and(lhs, rhs, ctx),
@@ -38,7 +38,7 @@ impl GenerateCode<(RegOrInt, CGType)> for Expr {
                     Operator::OpMod => CGType::TInt,
                     _ => unreachable!(),
                 };
-                (ctx.cg.add_int_op(&lhs_val, *op, &rhs_val), t)
+                (ctx.cg.add_int_op(lhs_val, *op, rhs_val), t)
             }
         }
     }
@@ -61,19 +61,19 @@ fn generate_or(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType) 
     let rhs_label = ctx.cg.next_label();
     let end_label = ctx.cg.next_label();
 
-    ctx.cg.add_jump(&lhs_label);
-    ctx.cg.add_label(&lhs_label);
+    ctx.cg.add_jump(lhs_label);
+    ctx.cg.add_label(lhs_label);
     let (lhs_val, _) = lhs.generate_code(ctx);
-    ctx.cg.add_cond_jump(&lhs_val, &end_label, &rhs_label);
+    ctx.cg.add_cond_jump(lhs_val, end_label, rhs_label);
 
-    ctx.cg.add_label(&rhs_label);
+    ctx.cg.add_label(rhs_label);
     let (rhs_val, _) = rhs.generate_code(ctx);
-    ctx.cg.add_jump(&end_label);
+    ctx.cg.add_jump(end_label);
 
-    ctx.cg.add_label(&end_label);
+    ctx.cg.add_label(end_label);
     let res_reg = ctx.cg.add_phi(CGType::TBool,
-                                 &(RegOrInt::Int(1), lhs_label),
-                                 &(rhs_val, rhs_label));
+                                 (RegOrInt::Int(1), lhs_label),
+                                 (rhs_val, rhs_label));
     (res_reg, CGType::TBool)
 }
 
@@ -82,19 +82,19 @@ fn generate_and(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType)
     let rhs_label = ctx.cg.next_label();
     let end_label = ctx.cg.next_label();
 
-    ctx.cg.add_jump(&lhs_label);
-    ctx.cg.add_label(&lhs_label);
+    ctx.cg.add_jump(lhs_label);
+    ctx.cg.add_label(lhs_label);
     let (lhs_val, _) = lhs.generate_code(ctx);
-    ctx.cg.add_cond_jump(&lhs_val, &rhs_label, &end_label);
+    ctx.cg.add_cond_jump(lhs_val, rhs_label, end_label);
 
-    ctx.cg.add_label(&rhs_label);
+    ctx.cg.add_label(rhs_label);
     let (rhs_val, _) = rhs.generate_code(ctx);
-    ctx.cg.add_jump(&end_label);
+    ctx.cg.add_jump(end_label);
 
-    ctx.cg.add_label(&end_label);
+    ctx.cg.add_label(end_label);
     let res_reg = ctx.cg.add_phi(CGType::TBool,
-                                 &(RegOrInt::Int(0), lhs_label),
-                                 &(rhs_val, rhs_label));
+                                 (RegOrInt::Int(0), lhs_label),
+                                 (rhs_val, rhs_label));
     (res_reg, CGType::TBool)
 }
 
@@ -102,8 +102,8 @@ fn generate_add(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType)
     let (lhs_val, t) = lhs.generate_code(ctx);
     let (rhs_val, _) = rhs.generate_code(ctx);
     let result = match t {
-        CGType::TInt => ctx.cg.add_int_op(&lhs_val, Operator::OpAdd, &rhs_val),
-        CGType::TString => ctx.cg.add_add_str(&lhs_val, &rhs_val),
+        CGType::TInt => ctx.cg.add_int_op(lhs_val, Operator::OpAdd, rhs_val),
+        CGType::TString => ctx.cg.add_add_str(lhs_val, rhs_val),
         _ => unreachable!(),
     };
     (result, t)
@@ -111,15 +111,15 @@ fn generate_add(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType)
 
 fn generate_neq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType) {
     let (val, t) = generate_eq(lhs, rhs, ctx);
-    (ctx.cg.add_neg(&val), t)
+    (ctx.cg.add_neg(val), t)
 }
 
 fn generate_eq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (RegOrInt, CGType) {
     let (lhs_val, t) = lhs.generate_code(ctx);
     let (rhs_val, _) = rhs.generate_code(ctx);
     let result = match t {
-        CGType::TInt => ctx.cg.add_int_op(&lhs_val, Operator::OpEq, &rhs_val),
-        CGType::TString => ctx.cg.add_op(CGType::TString, &lhs_val, Operator::OpEq, &rhs_val),
+        CGType::TInt => ctx.cg.add_int_op(lhs_val, Operator::OpEq, rhs_val),
+        CGType::TString => ctx.cg.add_op(CGType::TString, lhs_val, Operator::OpEq, rhs_val),
         // TODO
         _ => unreachable!(),
     };
@@ -134,7 +134,7 @@ impl GenerateCode<(RegOrInt, CGType)> for Lit {
             Lit::LFalse => (RegOrInt::Int(0), CGType::TBool),
             Lit::LString(ref s) => {
                 let reg = ctx.get_str_const(s);
-                (ctx.cg.add_str_load(s.len(), &reg), CGType::TString)
+                (ctx.cg.add_str_load(s.len(), reg), CGType::TString)
             }
             Lit::LNull => unimplemented!(), // TODO
         }
