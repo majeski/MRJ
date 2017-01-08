@@ -5,5 +5,6 @@ pub mod ast;
 pub mod ast_print;
 pub mod builtins;
 pub mod code_generation;
+pub mod optimization;
 pub mod parser;
 pub mod static_analysis;

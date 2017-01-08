@@ -6,8 +6,8 @@ use std::process::Command;
 extern crate latte;
 
 use latte::ast::Program;
-use latte::ast_print::print_code;
 use latte::code_generation;
+use latte::optimization;
 use latte::parser;
 use latte::static_analysis;
 
@@ -50,7 +50,16 @@ fn run() -> bool {
         _ => {}
     };
 
-    print_code(&program);
+    let program = optimization::run(program);
+
+    match static_analysis::check_returns(&program) {
+        Err(why) => {
+            print!("{}", why);
+            return false;
+        }
+        _ => {}
+    }
+
     match compile(&program, &path) {
         Err(why) => {
             println!("Compilation failed: {}", why);
