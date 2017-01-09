@@ -1,9 +1,0 @@
-int main() {
-  if (100 == 100) {
-    return 0;
-  } else {
-    if (2 < 3) {
-      return 3;
-    }
-  }
-}
