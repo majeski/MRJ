@@ -188,20 +188,20 @@ type: BUILTIN_TYPE { $$ = $1; }
 struct many_t *parsed_defs = NULL;
 
 void yyerror(const char *s) {
-  printf("line %d: %s\n", line_num, s);
+  fprintf(stderr, "ERROR\nline %d: %s\n", line_num, s);
 }
 
 int parse(int input_fd) {
   parsed_defs = NULL;
 	yyin = fdopen(input_fd, "r");
 	if (yyin == NULL) {
-		printf("[parser] Couldn't open input file");
+		fprintf(stderr, "ERROR\n[parser] Couldn't open input file");
 		return 1;
 	}
 
   if (yyparse() == 0) {
     if (mem_error) {
-      printf("[parser] Memory error");
+      fprintf(stderr, "ERROR\n[parser] Memory error");
       parsed_defs = NULL;
       return 1;
     }

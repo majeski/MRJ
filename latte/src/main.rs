@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::File;
 use std::io::{self, Write};
-use std::process::Command;
+use std::process::{Command, exit};
 
 extern crate latte;
 
@@ -11,41 +11,51 @@ use latte::optimization;
 use latte::parser;
 use latte::static_analysis;
 
+macro_rules! println_stderr(
+    ($($arg:tt)*) => { {
+        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
+        r.expect("failed printing to stderr");
+    } }
+);
+
 fn main() {
-    let stderr_msg = match run() {
-        true => "OK",
-        false => "ERROR",
-    };
-    writeln!(&mut io::stderr(), "{}", stderr_msg).unwrap();
+    match run() {
+        Err(e) => {
+            println_stderr!("ERROR\n{}", e);
+            exit(-1);
+        }
+        Ok(..) => {
+            println_stderr!("OK");
+            exit(0);
+        }
+    }
 }
 
-fn run() -> bool {
+fn run() -> Result<(), String> {
     let args: std::vec::Vec<String> = env::args().collect();
     if args.len() != 2 {
-        println!("Usage: ./{} input_file", args[0]);
-        return false;
+        return Err(format!("Usage: ./{} input_file", args[0]));
     }
 
     let path = std::path::Path::new(&args[1]);
     let program_file = match File::open(path) {
         Err(why) => {
-            println!("Couldn't open file {}: {}", &args[1], why);
-            return false;
+            return Err(format!("Couldn't open file {}: {}", &args[1], why));
         }
         Ok(r) => r,
     };
 
     let program = match parser::run(program_file) {
         Err(..) => {
-            return false;
+            // error message printed from C code
+            exit(-1);
         }
         Ok(x) => x,
     };
 
     match static_analysis::run(&program) {
         Err(why) => {
-            print!("{}", why);
-            return false;
+            return Err(format!("{}", why));
         }
         _ => {}
     };
@@ -54,19 +64,19 @@ fn run() -> bool {
 
     match static_analysis::check_returns(&program) {
         Err(why) => {
-            print!("{}", why);
-            return false;
+            return Err(format!("{}", why));
         }
         _ => {}
     }
 
     match compile(&program, &path) {
         Err(why) => {
-            println!("Compilation failed: {}", why);
-            false
+            return Err(format!("Compilation failed: {}", why));
         }
-        _ => true,
+        _ => {}
     }
+
+    Ok(())
 }
 
 fn compile(p: &Program, input: &std::path::Path) -> Result<(), io::Error> {

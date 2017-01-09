@@ -2,29 +2,37 @@
 #include <stdlib.h>
 #include <string.h>
 
-void printInt(int x) {
-  printf("%d", x);
-}
+void printInt(int x) { printf("%d\n", x); }
 
-void printString(char *s) {
-  printf("%s", s);
-}
+void printString(char *s) { printf("%s\n", s); }
 
-void error() {
-  exit(-1);
-}
+void error() { exit(EXIT_FAILURE); }
 
 int readInt() {
   int x;
   scanf("%d", &x);
+  getchar();
   return x;
 }
 
 char *readString() {
   char *buf = NULL;
   size_t size = 0;
-  if (getline(&buf, &size, stdin) == -1) {
-    return NULL;
+
+  getline(&buf, &size, stdin);
+  if (buf == NULL || strlen(buf) == 0) {
+    if (buf == NULL) {
+      buf = malloc(1);
+    }
+    if (buf != NULL) {
+      buf[0] = 0;
+    }
+    return buf;
+  }
+
+  size = strlen(buf);
+  if (buf[size - 1] == '\n') {
+    buf[size - 1] = 0;
   }
   return buf;
 }

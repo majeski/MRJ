@@ -2,6 +2,8 @@ use std::fmt;
 
 use ast::{self, Operator};
 
+use code_generation::utils::*;
+
 #[derive(Debug)]
 pub struct CodeGenerator {
     out: Vec<String>,
@@ -175,7 +177,7 @@ impl CodeGenerator {
                                          c\"{}\\00\"",
                                         reg,
                                         s.len() + 1,
-                                        s));
+                                        string_to_hex(s)));
         reg
     }
 

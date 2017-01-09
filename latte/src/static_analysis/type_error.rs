@@ -69,7 +69,7 @@ impl TypeError {
     }
 
     pub fn return_void_expr() -> TypeError {
-        Self::new(format!("Cannot return expression from void function"))
+        Self::new(format!("Cannot return expression result from void function"))
     }
 
     pub fn invalid_call_arg_num(expected: usize, actual: usize) -> TypeError {
