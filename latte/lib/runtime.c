@@ -4,9 +4,12 @@
 
 void printInt(int x) { printf("%d\n", x); }
 
-void printString(char *s) { printf("%s\n", s); }
+void printString(char *s) { puts(s); }
 
-void error() { exit(EXIT_FAILURE); }
+void error() {
+  puts("runtime error");
+  exit(EXIT_FAILURE);
+}
 
 int readInt() {
   int x;
