@@ -40,6 +40,7 @@ impl GenerateCode<(RegOrInt, CGType)> for Expr {
                 };
                 (ctx.cg.add_int_op(lhs_val, *op, rhs_val), t)
             }
+            Expr::ENewArray(..) => unimplemented!(), // TODO
         }
     }
 }

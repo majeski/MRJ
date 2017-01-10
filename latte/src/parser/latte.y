@@ -58,13 +58,18 @@ void yyerror(const char *s);
 %left '+' '-'
 %left '*' '/' '%'
 %left UNOT UNEG
+%right '['
+%left '.'
 
-%token RETURN "return statement"
-%token IF "if statement"
-%token ELSE "else"
-%token WHILE "while statement"
+%token BRACKETS "[]"
 %token CLASS "class definition"
+%token ELSE "else"
 %token EXTENDS "extends <superclass>"
+%token FOR "for"
+%token IF "if statement"
+%token NEW "new"
+%token RETURN "return statement"
+%token WHILE "while statement"
 
 %type <many> defs "list of definitions";
 %type <def> def "definition";
@@ -92,7 +97,8 @@ void yyerror(const char *s);
 
 %type <field_get> field_get;
 
-%type <str> type "type"
+%type <str> type "type";
+%type <str> simple_type "simple_type";
 %%
 program: defs { parsed_defs = $1; }
 
@@ -144,6 +150,7 @@ stmt: /* empty */ ';' { $$ = stmt_empty_create(); }
     | IF '(' expr ')' stmt ELSE stmt { $$ = stmt_if_create($3, $5, $7); }
     | IF '(' expr ')' stmt { $$ = stmt_if_create($3, $5, NULL); }
     | WHILE '(' expr ')' stmt { $$ = stmt_while_create($3, $5); }
+    | FOR '(' type IDENT ':' expr ')' stmt { $$ = stmt_for_create($3, $4, $6, $8); }
 
 var_inits: var_init { $$ = many_create($1); }
          | var_init ',' var_inits { $$ = many_add($1, $3); }
@@ -171,6 +178,7 @@ expr: expr OR expr { $$ = expr_binop_create($1, $3, "||"); }
     | '-' expr %prec UNEG { $$ = expr_unary_create('-', $2); }
     | '!' expr %prec UNOT { $$ = expr_unary_create('!', $2); }
     | '(' expr ')' { $$ = $2; }
+    | NEW simple_type '[' expr ']' { $$ = expr_new_array_create($2, $4); }
     | field_get '(' exprs ')' { $$ = expr_call_create($1, $3); }
     | field_get { $$ = expr_field_get_create($1); }
     | LIT_INT { $$ = expr_lit_create(EXPR_TYPE_LIT_INT, $1); }
@@ -178,11 +186,15 @@ expr: expr OR expr { $$ = expr_binop_create($1, $3, "||"); }
     | LIT_BOOL { $$ = expr_lit_create(EXPR_TYPE_LIT_BOOL, $1); }
     | LIT_NULL { $$ = expr_lit_create(EXPR_TYPE_LIT_NULL, NULL); }
 
-field_get: IDENT { $$ = field_get_create($1, NULL); }
-         | IDENT '.' field_get { $$ = field_get_create($1, $3); }
+field_get: expr '.' IDENT { $$ = field_get_create($1, $3); }
+         | expr '[' expr ']' { $$ = field_get_idx_create($1, $3); }
+         | IDENT { $$ = field_get_create(NULL, $1); }
 
-type: BUILTIN_TYPE { $$ = $1; }
-    | IDENT { $$ = $1; }
+type: simple_type BRACKETS { $$ = array_type_create($1); }
+    | simple_type
+
+simple_type: BUILTIN_TYPE { $$ = $1; }
+           | IDENT { $$ = $1; }
 %%
 
 struct many_t *parsed_defs = NULL;

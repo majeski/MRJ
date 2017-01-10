@@ -1,14 +1,15 @@
 #include "common.h"
 
-const int EXPR_TYPE_BINOP = 1;
-const int EXPR_TYPE_UNARY = 2;
-const int EXPR_TYPE_CALL = 3;
-const int EXPR_TYPE_FIELD = 4;
-const int EXPR_TYPE_LIT = 5;
-const int EXPR_TYPE_LIT_INT = 100;
-const int EXPR_TYPE_LIT_STR = 101;
-const int EXPR_TYPE_LIT_BOOL = 102;
-const int EXPR_TYPE_LIT_NULL = 103;
+const int EXPR_TYPE_BINOP = 0;
+const int EXPR_TYPE_CALL = 1;
+const int EXPR_TYPE_FIELD = 2;
+const int EXPR_TYPE_LIT = 3;
+const int EXPR_TYPE_LIT_BOOL = 4;
+const int EXPR_TYPE_LIT_INT = 5;
+const int EXPR_TYPE_LIT_NULL = 6;
+const int EXPR_TYPE_LIT_STR = 7;
+const int EXPR_TYPE_NEW_ARR = 8;
+const int EXPR_TYPE_UNARY = 9;
 
 struct expr_t *expr_create(int32_t type, void *e);
 
@@ -50,6 +51,14 @@ struct expr_t *expr_lit_create(int32_t type, char *lit) {
   return expr_create(EXPR_TYPE_LIT, e);
 }
 
+struct expr_t *expr_new_array_create(char *type, struct expr_t *size) {
+  struct expr_new_arr_t *e = malloc(sizeof(struct expr_new_arr_t));
+  CHECK_NULL(e);
+  e->type = type;
+  e->size = size;
+  return expr_create(EXPR_TYPE_NEW_ARR, e);
+}
+
 struct expr_t *expr_create(int32_t type, void *e) {
   struct expr_t *expr = malloc(sizeof(struct expr_t));
   CHECK_NULL(e);
@@ -85,6 +94,10 @@ void expr_free(void *ptr) {
   } else if (type == EXPR_TYPE_LIT) {
     struct expr_lit_t *expr = (struct expr_lit_t *)e;
     free(expr->lit);
+  } else if (type == EXPR_TYPE_NEW_ARR) {
+    struct expr_new_arr_t *expr = (struct expr_new_arr_t *)e;
+    free(expr->type);
+    expr_free(expr->size);
   } else {
     assert(0);
     exit(-1);

@@ -41,6 +41,10 @@ impl TypeError {
         Self::new(format!("No {} operator for types: {} and {}", op, lhs_t, rhs_t))
     }
 
+    pub fn invalid_arr_subscript(t: &Type, idx_t: &Type) -> TypeError {
+        Self::new(format!("Invalid types '{}[{}]' for array subscription", t, idx_t))
+    }
+
     // int main()
 
     pub fn no_main() -> TypeError {
@@ -106,8 +110,12 @@ impl TypeError {
                           actual))
     }
 
-    pub fn not_an_object(ident: &Ident) -> TypeError {
-        Self::new(format!("{} is not an object", ident))
+    pub fn no_member(t: &Type, field: &Ident) -> TypeError {
+        Self::new(format!("Cannot access field '{}' for type '{}'", field, t))
+    }
+
+    pub fn not_an_object(t: &Type) -> TypeError {
+        Self::new(format!("Cannot access field for type '{}'", t))
     }
 
     // ctor

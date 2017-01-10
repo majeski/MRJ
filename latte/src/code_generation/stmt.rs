@@ -102,6 +102,7 @@ impl GenerateCode<()> for Stmt {
 
                 ctx.cg.add_label(end_label);
             }
+            Stmt::SFor(..) => unimplemented!(), // TODO
         }
     }
 }

@@ -1,8 +1,11 @@
 use ast::{FieldGet, Ident};
 
 pub fn get_ident(field_get: &FieldGet) -> &Ident {
-    // TODO
-    &field_get.ident
+    match *field_get {
+        FieldGet::Direct(ref ident) => ident,
+        FieldGet::Indirect(..) => unimplemented!(), // TODO
+        FieldGet::IdxAccess(..) => unimplemented!(), // TODO
+    }
 }
 
 pub fn string_to_hex(s: &String) -> String {

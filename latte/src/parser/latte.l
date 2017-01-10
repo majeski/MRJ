@@ -18,7 +18,9 @@ int line_num = 1;
 "//".* ;
 
 \n ++line_num;
-[ \t] { BEGIN 0; }; // whitespace
+[ \t] ; // whitespace
+
+"[]" { return BRACKETS; }
 
 "<=" { BEGIN 0; return LE; }
 ">=" { BEGIN 0; return GE; }
@@ -26,7 +28,7 @@ int line_num = 1;
 "!=" { BEGIN 0; return NEQ; }
 "&&" { BEGIN 0; return AND; }
 "||" { BEGIN 0; return OR; }
-[-+*/%=,;!{}()<>.] { BEGIN 0; return yytext[0]; }
+[-+*/%=,:;!{}()<>.\[\]] { BEGIN 0; return yytext[0]; }
 
 <VAR>"++" { BEGIN 0; return INCR; }
 <VAR>"--" { BEGIN 0; return DECR; }
@@ -40,12 +42,14 @@ null { return LIT_NULL; }
   return LIT_STR;
 }
 
-if { return IF; }
-else { return ELSE; }
-while { return WHILE; }
-return { return RETURN; }
 class { return CLASS; }
+else { return ELSE; }
 extends { return EXTENDS; }
+for { return FOR; }
+if { return IF; }
+new { return NEW; }
+return { return RETURN; }
+while { return WHILE; }
 
 (int|string|boolean|void) { yylval.str = strdup(yytext); CE; return BUILTIN_TYPE; }
 [a-zA-Z_][a-zA-Z_0-9]* { yylval.str = strdup(yytext); CE; BEGIN VAR; return IDENT; }

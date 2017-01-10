@@ -1,14 +1,15 @@
 #include "common.h"
 
-const int32_t STMT_TYPE_VAR_INIT = 0;
-const int32_t STMT_TYPE_ASSIGN = 1;
-const int32_t STMT_TYPE_POSTFIX = 2;
-const int32_t STMT_TYPE_RETURN = 3;
-const int32_t STMT_TYPE_BLOCK = 4;
-const int32_t STMT_TYPE_EXPR = 5;
-const int32_t STMT_TYPE_IF = 6;
-const int32_t STMT_TYPE_WHILE = 7;
-const int32_t STMT_TYPE_EMPTY = 8;
+const int32_t STMT_TYPE_ASSIGN = 0;
+const int32_t STMT_TYPE_BLOCK = 1;
+const int32_t STMT_TYPE_EMPTY = 2;
+const int32_t STMT_TYPE_EXPR = 3;
+const int32_t STMT_TYPE_FOR = 4;
+const int32_t STMT_TYPE_IF = 5;
+const int32_t STMT_TYPE_POSTFIX = 6;
+const int32_t STMT_TYPE_RETURN = 7;
+const int32_t STMT_TYPE_VAR_INIT = 8;
+const int32_t STMT_TYPE_WHILE = 9;
 
 struct stmt_t *stmt_create(int32_t type, void *s);
 
@@ -78,6 +79,17 @@ struct stmt_t *stmt_while_create(struct expr_t *cond, struct stmt_t *stmts) {
   return stmt_create(STMT_TYPE_WHILE, s);
 }
 
+struct stmt_t *stmt_for_create(char *type, char *ident, struct expr_t *e,
+                               struct stmt_t *stmt) {
+  struct stmt_for_t *s = malloc(sizeof(struct stmt_for_t));
+  CHECK_NULL(s);
+  s->type = type;
+  s->ident = ident;
+  s->e = e;
+  s->s = stmt;
+  return stmt_create(STMT_TYPE_FOR, s);
+}
+
 struct stmt_t *stmt_create(int32_t type, void *s) {
   struct stmt_t *stmt = malloc(sizeof(struct stmt_t));
   CHECK_NULL(stmt);
@@ -123,6 +135,12 @@ void stmt_free(void *ptr) {
   } else if (type == STMT_TYPE_WHILE) {
     struct stmt_while_t *stmt = (struct stmt_while_t *)s;
     expr_free(stmt->cond);
+    stmt_free(stmt->s);
+  } else if (type == STMT_TYPE_FOR) {
+    struct stmt_for_t *stmt = (struct stmt_for_t *)s;
+    free(stmt->type);
+    free(stmt->ident);
+    expr_free(stmt->e);
     stmt_free(stmt->s);
   } else {
     assert(0);

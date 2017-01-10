@@ -69,6 +69,7 @@ pub enum Stmt {
     SIf(Expr, Box<Stmt>),
     SIfElse(Expr, Box<Stmt>, Box<Stmt>),
     SWhile(Expr, Box<Stmt>),
+    SFor(Type, Ident, Expr, Box<Stmt>),
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +86,7 @@ pub enum Expr {
     ENeg(Box<Expr>),
     ENot(Box<Expr>),
     EBinOp(Box<Expr>, Operator, Box<Expr>),
+    ENewArray(Type, Box<Expr>),
 }
 
 #[derive(Debug, Clone)]
@@ -114,9 +116,10 @@ pub enum Operator {
 }
 
 #[derive(Debug, Clone)]
-pub struct FieldGet {
-    pub ident: Ident,
-    pub field: Option<Box<FieldGet>>,
+pub enum FieldGet {
+    Indirect(Box<Expr>, Ident), // <expr>.field
+    Direct(Ident),
+    IdxAccess(Box<Expr>, Box<Expr>), // <expr>[<expr>]
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
@@ -129,6 +132,7 @@ pub enum Type {
     TBool,
     TVoid,
     TFunc(Vec<Type>, Box<Type>),
+    TArray(Box<Type>),
     TObject(Ident /* class name */),
     TNull,
 }

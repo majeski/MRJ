@@ -9,14 +9,15 @@ use parser::to_ast::*;
 
 #[link(name = "parse", kind = "static")]
 extern "C" {
-    static STMT_TYPE_EMPTY: c_int;
-    static STMT_TYPE_VAR_INIT: c_int;
     static STMT_TYPE_ASSIGN: c_int;
+    static STMT_TYPE_BLOCK: c_int;
+    static STMT_TYPE_EMPTY: c_int;
+    static STMT_TYPE_EXPR: c_int;
+    static STMT_TYPE_FOR: c_int;
+    static STMT_TYPE_IF: c_int;
     static STMT_TYPE_POSTFIX: c_int;
     static STMT_TYPE_RETURN: c_int;
-    static STMT_TYPE_BLOCK: c_int;
-    static STMT_TYPE_EXPR: c_int;
-    static STMT_TYPE_IF: c_int;
+    static STMT_TYPE_VAR_INIT: c_int;
     static STMT_TYPE_WHILE: c_int;
 }
 
@@ -62,6 +63,9 @@ impl ToAst<Stmt> for stmt_t {
             }
             if self.t == STMT_TYPE_WHILE {
                 return (self.ptr as *mut stmt_while_t).to_ast();
+            }
+            if self.t == STMT_TYPE_FOR {
+                return (self.ptr as *mut stmt_for_t).to_ast();
             }
         }
         Err(format!("Unknown statement type: {}", self.t))
@@ -163,5 +167,23 @@ impl ToAst<Stmt> for stmt_while_t {
         let cond = self.cond.to_ast()?;
         let stmt = self.stmt.to_ast()?;
         Ok(Stmt::SWhile(cond, Box::new(stmt)))
+    }
+}
+
+#[repr(C)]
+struct stmt_for_t {
+    t: *mut c_char,
+    ident: *mut c_char,
+    e: *mut expr_t,
+    stmt: *mut stmt_t,
+}
+
+impl ToAst<Stmt> for stmt_for_t {
+    fn to_ast(&self) -> TAResult<Stmt> {
+        let t = self.t.to_ast()?;
+        let ident = self.ident.to_ast()?;
+        let e = self.e.to_ast()?;
+        let stmt = self.stmt.to_ast()?;
+        Ok(Stmt::SFor(t, ident, e, Box::new(stmt)))
     }
 }

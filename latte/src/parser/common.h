@@ -19,5 +19,6 @@ extern int mem_error;
 #include "field_get.h"
 #include "many.h"
 #include "stmt.h"
+#include "type.h"
 
 #endif

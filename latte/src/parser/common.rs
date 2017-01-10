@@ -25,12 +25,24 @@ impl ToAst<String> for *mut c_char {
 impl ToAst<Type> for *mut c_char {
     fn to_ast(&self) -> TAResult<Type> {
         let type_str: String = self.to_ast()?;
-        match type_str.as_ref() {
-            "int" => Ok(Type::TInt),
-            "string" => Ok(Type::TString),
-            "boolean" => Ok(Type::TBool),
-            "void" => Ok(Type::TVoid),
-            _ => Ok(Type::TObject(Ident(type_str))),
+        type_str.to_ast()
+    }
+}
+
+impl ToAst<Type> for String {
+    fn to_ast(&self) -> TAResult<Type> {
+        if self.starts_with("[") {
+            let inner: Type = String::from(self.split_at(1).1).to_ast()?;
+            Ok(Type::TArray(Box::new(inner)))
+        } else {
+            let t = match self.as_ref() {
+                "int" => Type::TInt,
+                "string" => Type::TString,
+                "boolean" => Type::TBool,
+                "void" => Type::TVoid,
+                _ => Type::TObject(Ident(self.clone())),
+            };
+            Ok(t)
         }
     }
 }

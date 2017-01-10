@@ -9,14 +9,15 @@ use parser::to_ast::*;
 #[link(name = "parse", kind = "static")]
 extern "C" {
     static EXPR_TYPE_BINOP: c_int;
-    static EXPR_TYPE_UNARY: c_int;
     static EXPR_TYPE_CALL: c_int;
     static EXPR_TYPE_FIELD: c_int;
     static EXPR_TYPE_LIT: c_int;
-    static EXPR_TYPE_LIT_INT: c_int;
-    static EXPR_TYPE_LIT_STR: c_int;
     static EXPR_TYPE_LIT_BOOL: c_int;
+    static EXPR_TYPE_LIT_INT: c_int;
     static EXPR_TYPE_LIT_NULL: c_int;
+    static EXPR_TYPE_LIT_STR: c_int;
+    static EXPR_TYPE_NEW_ARR: c_int;
+    static EXPR_TYPE_UNARY: c_int;
 }
 
 #[repr(C)]
@@ -43,6 +44,9 @@ impl ToAst<Expr> for expr_t {
             }
             if self.t == EXPR_TYPE_BINOP {
                 return (self.ptr as *mut expr_binop_t).to_ast();
+            }
+            if self.t == EXPR_TYPE_NEW_ARR {
+                return (self.ptr as *mut expr_new_array_t).to_ast();
             }
         }
         return Err(format!("Unknown expression type: {}", self.t));
@@ -152,5 +156,17 @@ impl ToAst<Expr> for expr_lit_t {
             }
         };
         Ok(Expr::ELit(lit))
+    }
+}
+
+#[repr(C)]
+struct expr_new_array_t {
+    t: *mut c_char,
+    size: *mut expr_t,
+}
+
+impl ToAst<Expr> for expr_new_array_t {
+    fn to_ast(&self) -> TAResult<Expr> {
+        Ok(Expr::ENewArray(self.t.to_ast()?, Box::new(self.size.to_ast()?)))
     }
 }

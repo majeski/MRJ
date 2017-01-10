@@ -142,6 +142,14 @@ impl Display for Stmt {
                 };
                 writeln!(dst, "{}{}", indent, '}').expect(FERR);
             }
+            Stmt::SFor(ref t, ref ident, ref e, ref stmt) => {
+                writeln!(dst, "{}for ({} {} : {}) {}", indent, t, ident, e, '{').expect(FERR);
+                match **stmt {
+                    Stmt::SBlock(ref stmts) => stmts.print(&inner_indent, dst),
+                    _ => stmt.print(&inner_indent, dst),
+                }
+                writeln!(dst, "{}{}", indent, '}').expect(FERR);
+            }
         };
     }
 }
@@ -181,6 +189,7 @@ impl fmt::Display for Expr {
             Expr::ENeg(ref e) => format!("-{}", *e),
             Expr::ENot(ref e) => format!("!{}", *e),
             Expr::EBinOp(ref lhs, ref op, ref rhs) => format!("({} {} {})", *lhs, op, *rhs),
+            Expr::ENewArray(ref t, ref size) => format!("new {}[{}]", t, *size),
         };
         write!(f, "{}", s)
     }
@@ -201,11 +210,12 @@ impl fmt::Display for Lit {
 
 impl fmt::Display for FieldGet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.ident)?;
-        if let Some(ref field) = self.field {
-            write!(f, ".{}", field)?;
-        }
-        Ok(())
+        let s = match *self {
+            FieldGet::Direct(ref ident) => format!("{}", ident),
+            FieldGet::Indirect(ref e, ref field) => format!("{}.{}", *e, field),
+            FieldGet::IdxAccess(ref e, ref idx) => format!("{}[{}]", *e, *idx),
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -224,6 +234,7 @@ impl fmt::Display for Type {
             Type::TBool => format!("boolean"),
             Type::TVoid => format!("void"),
             Type::TFunc(ref args, ref ret_type) => format!("({}) -> {}", print_vec(args), ret_type),
+            Type::TArray(ref t) => format!("{}[]", t),
             Type::TObject(ref cname) => format!("{}", cname),
             Type::TNull => format!("<null_type>"),
         };

@@ -260,17 +260,27 @@ impl<'a> HasType<(), &'a mut TypeContext> for Stmt {
             Stmt::SExpr(ref expr) => {
                 expr.check_types(ctx)?;
             }
-            Stmt::SIf(ref expr, ref stmts) |
-            Stmt::SWhile(ref expr, ref stmts) => {
+            Stmt::SIf(ref expr, ref stmt) |
+            Stmt::SWhile(ref expr, ref stmt) => {
                 let etype = expr.check_types(ctx)?;
                 expect_type(&Type::TBool, &etype, ctx)?;
-                ctx.in_new_scope(|mut ctx| stmts.check_types(&mut ctx))?;
+                ctx.in_new_scope(|mut ctx| stmt.check_types(&mut ctx))?;
             }
             Stmt::SIfElse(ref expr, ref if_t, ref if_f) => {
                 let etype = expr.check_types(ctx)?;
                 expect_type(&Type::TBool, &etype, ctx)?;
                 ctx.in_new_scope(|mut ctx| if_t.check_types(&mut ctx))?;
                 ctx.in_new_scope(|mut ctx| if_f.check_types(&mut ctx))?;
+            }
+            Stmt::SFor(ref t, ref ident, ref e, ref stmt) => {
+                let e_type = e.check_types(ctx)?;
+                expect_declarable_type(&e_type, ctx)?;
+                expect_type(&Type::TArray(Box::new(t.clone())), &e_type, ctx)?;
+                ctx.in_new_scope(|mut ctx| {
+                        add_ident(ident, t, &mut ctx)?;
+                        stmt.check_types(&mut ctx)?;
+                        Ok(())
+                    })?;
             }
         };
         Ok(())
@@ -333,6 +343,11 @@ impl<'a> HasType<Type, &'a TypeContext> for Expr {
                     }
                 }
             }
+            Expr::ENewArray(ref t, ref size) => {
+                expect_declarable_type(t, &ctx)?;
+                expect_type(&Type::TInt, &size.check_types(ctx)?, ctx)?;
+                Ok(Type::TArray(Box::new(t.clone())))
+            }
         }
     }
 }
@@ -387,13 +402,36 @@ impl<'a> HasType<Type, &'a TypeContext> for FieldGet {
     }
 
     fn do_check_types(&self, ctx: &TypeContext) -> TypeResult<Type> {
-        match self.field {
-            None => self.ident.check_types(ctx),
-            Some(ref field) => {
-                if let Type::TObject(ref cname) = self.ident.check_types(ctx)? {
-                    ctx.in_class_scope(cname, false, |ctx| field.check_types(&ctx))
+        match *self {
+            FieldGet::Direct(ref ident) => ident.check_types(ctx),
+            FieldGet::Indirect(ref e, ref field) => {
+                let e_type = e.check_types(ctx)?;
+                if let Type::TObject(ref cname) = e_type {
+                    match ctx.get_field_type(cname, field) {
+                        Some(ref t) => Ok((*t).clone()),
+                        None => Err(TypeError::no_member(&e_type, field)),
+                    }
+                } else if let Type::TArray(..) = e_type {
+                    if *field == Ident(format!("length")) {
+                        Ok(Type::TInt)
+                    } else {
+                        Err(TypeError::no_member(&e_type, field))
+                    }
                 } else {
-                    Err(TypeError::not_an_object(&self.ident))
+                    Err(TypeError::not_an_object(&e_type))
+                }
+            }
+            FieldGet::IdxAccess(ref e, ref idx) => {
+                let e_type = e.check_types(ctx)?;
+                let idx_type = idx.check_types(ctx)?;
+                if let Type::TArray(ref t) = e_type {
+                    if idx_type == Type::TInt {
+                        Ok((**t).clone())
+                    } else {
+                        Err(TypeError::invalid_arr_subscript(&e_type, &idx_type))
+                    }
+                } else {
+                    Err(TypeError::invalid_arr_subscript(&e_type, &idx_type))
                 }
             }
         }
@@ -432,6 +470,7 @@ fn expect_declarable_type(t: &Type, ctx: &TypeContext) -> TypeResult<()> {
         Type::TInt |
         Type::TString |
         Type::TBool |
+        Type::TArray(..) |
         Type::TObject(..) => Ok(()),
         _ => Err(TypeError::non_declarable(t)),
     }
@@ -445,6 +484,7 @@ fn expect_valid_type(t: &Type, ctx: &TypeContext) -> TypeResult<()> {
                 false => Err(TypeError::inexistent_type(t)),
             }
         }
+        Type::TArray(ref t) => expect_valid_type(&**t, ctx),
         _ => Ok(()),
     }
 }
