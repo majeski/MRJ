@@ -9,6 +9,7 @@ use static_analysis::collect_string_lit::*;
 mod code_generator;
 mod context;
 mod expr;
+mod field_get;
 mod func;
 mod generate;
 mod stmt;

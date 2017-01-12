@@ -6,7 +6,7 @@ use code_generation::code_generator::*;
 
 #[derive(Debug)]
 pub struct Context {
-    pub vars: HashMap<Ident, AddrRegister>,
+    pub vars: HashMap<Ident, (Register, CGType)>,
     pub func_ret_types: HashMap<Ident, CGType>,
     pub string_lits: HashMap<String, StrConstant>,
     pub cg: CodeGenerator,
@@ -43,11 +43,11 @@ impl Context {
         self.string_lits.insert(s, reg);
     }
 
-    pub fn get_var(&self, ident: &Ident) -> AddrRegister {
+    pub fn get_var(&self, ident: &Ident) -> (Register, CGType) {
         *self.vars.get(ident).unwrap()
     }
 
-    pub fn set_var(&mut self, ident: Ident, addr_reg: AddrRegister) {
-        self.vars.insert(ident.clone(), addr_reg);
+    pub fn set_var(&mut self, ident: Ident, addr_reg: Register, t: CGType) {
+        self.vars.insert(ident.clone(), (addr_reg, t));
     }
 }

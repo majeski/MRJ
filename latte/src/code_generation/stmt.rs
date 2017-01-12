@@ -5,7 +5,6 @@ use static_analysis::has_return::*;
 use code_generation::code_generator::*;
 use code_generation::context::*;
 use code_generation::generate::*;
-use code_generation::utils::get_ident;
 
 impl GenerateCode<()> for Vec<Stmt> {
     fn generate_code(&self, ctx: &mut Context) {
@@ -27,21 +26,21 @@ impl GenerateCode<()> for Stmt {
                 decls.generate_code(ctx);
             }
             Stmt::SAssign(ref ident, ref e) => {
-                let addr_reg = ctx.get_var(get_ident(ident));
+                let (addr_reg, t) = ident.generate_code(ctx);
                 let (val_reg, _) = e.generate_code(ctx);
-                ctx.cg.add_store(addr_reg, val_reg);
+                ctx.cg.add_store(addr_reg, t, val_reg);
             }
             Stmt::SInc(ref ident) => {
-                let addr_reg = ctx.get_var(get_ident(ident));
-                let mut val_reg = ctx.cg.add_load(addr_reg);
-                val_reg = ctx.cg.add_int_op(val_reg, Operator::OpAdd, RegOrInt::Int(1));
-                ctx.cg.add_store(addr_reg, val_reg);
+                let (addr_reg, t) = ident.generate_code(ctx);
+                let mut val_reg = ctx.cg.add_load(addr_reg, t);
+                val_reg = ctx.cg.add_int_op(Val::Reg(val_reg), Operator::OpAdd, Val::Int(1));
+                ctx.cg.add_store(addr_reg, t, Val::Reg(val_reg));
             }
             Stmt::SDec(ref ident) => {
-                let addr_reg = ctx.get_var(get_ident(ident));
-                let mut val_reg = ctx.cg.add_load(addr_reg);
-                val_reg = ctx.cg.add_int_op(val_reg, Operator::OpSub, RegOrInt::Int(1));
-                ctx.cg.add_store(addr_reg, val_reg);
+                let (addr_reg, t) = ident.generate_code(ctx);
+                let mut val_reg = ctx.cg.add_load(addr_reg, t);
+                val_reg = ctx.cg.add_int_op(Val::Reg(val_reg), Operator::OpSub, Val::Int(1));
+                ctx.cg.add_store(addr_reg, t, Val::Reg(val_reg));
             }
             Stmt::SReturnE(ref e) => {
                 let (val, t) = e.generate_code(ctx);
@@ -102,7 +101,44 @@ impl GenerateCode<()> for Stmt {
 
                 ctx.cg.add_label(end_label);
             }
-            Stmt::SFor(..) => unimplemented!(), // TODO
+            Stmt::SFor(_, ref ident, ref arr, ref stmt) => {
+                let (arr, arr_t) = arr.generate_code(ctx);
+                let before_loop = ctx.cg.next_label();
+                let loop_begin = ctx.cg.next_label();
+                let loop_body = ctx.cg.next_label();
+                let loop_end = ctx.cg.next_label();
+                let after_loop = ctx.cg.next_label();
+
+                ctx.cg.add_jump(before_loop);
+                ctx.cg.add_label(before_loop);
+                let arr_size_ptr = ctx.cg.get_field_addr(arr, arr_t, 0);
+                let arr_size = ctx.cg.add_load(arr_size_ptr, CGType::new(RawType::TInt));
+
+                ctx.cg.add_jump(loop_begin);
+                ctx.cg.add_label(loop_begin);
+                let new_idx_reg = ctx.cg.next_reg();
+                let idx_reg = ctx.cg.add_phi(CGType::new(RawType::TInt),
+                                             (Val::Int(0), before_loop),
+                                             (Val::Reg(new_idx_reg), loop_end));
+                let valid_idx = ctx.cg
+                    .add_int_op(Val::Reg(idx_reg), Operator::OpLess, Val::Reg(arr_size));
+                ctx.cg.add_cond_jump(Val::Reg(valid_idx), loop_body, after_loop);
+
+                ctx.cg.add_label(loop_body);
+                ctx.in_new_scope(|mut ctx| {
+                    let (elem_addr, elem_t) = ctx.cg
+                        .get_nth_arr_elem(arr, arr_t, Val::Reg(idx_reg));
+                    ctx.set_var(ident.clone(), elem_addr, elem_t);
+                    stmt.generate_code(&mut ctx);
+                });
+
+                ctx.cg.add_jump(loop_end);
+                ctx.cg.add_label(loop_end);
+                ctx.cg.add_loop_step(new_idx_reg, idx_reg);
+                ctx.cg.add_jump(loop_begin);
+
+                ctx.cg.add_label(after_loop);
+            }
         }
     }
 }
@@ -119,10 +155,11 @@ impl GenerateCode<()> for VarDecl {
     fn generate_code(&self, ctx: &mut Context) {
         match *self {
             VarDecl::Init(ref t, ref ident, ref e) => {
-                let addr_reg = ctx.cg.add_alloca(CGType::from(t));
+                let t = CGType::from(t);
+                let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = e.generate_code(ctx);
-                ctx.cg.add_store(addr_reg, val_reg);
-                ctx.set_var(ident.clone(), addr_reg);
+                ctx.cg.add_store(addr_reg, t, val_reg);
+                ctx.set_var(ident.clone(), addr_reg, t);
             }
             VarDecl::NoInit(ref t, ref ident) => {
                 let default_lit = match *t {
@@ -132,10 +169,11 @@ impl GenerateCode<()> for VarDecl {
                     Type::TObject(..) => Lit::LNull,
                     _ => unreachable!(),
                 };
-                let addr_reg = ctx.cg.add_alloca(CGType::from(t));
+                let t = CGType::from(t);
+                let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = Expr::ELit(default_lit).generate_code(ctx);
-                ctx.cg.add_store(addr_reg, val_reg);
-                ctx.set_var(ident.clone(), addr_reg);
+                ctx.cg.add_store(addr_reg, t, val_reg);
+                ctx.set_var(ident.clone(), addr_reg, t);
             }
         }
     }

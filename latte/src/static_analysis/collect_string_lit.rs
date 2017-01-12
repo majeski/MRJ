@@ -77,6 +77,10 @@ impl CollectStringLit for Stmt {
                 s1.collect(res);
                 s2.collect(res);
             }
+            Stmt::SFor(_, _, ref e, ref stmt) => {
+                e.collect(res);
+                stmt.collect(res);
+            }
             _ => {}
         }
     }

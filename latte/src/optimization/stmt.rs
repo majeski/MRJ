@@ -67,6 +67,7 @@ impl Optimize for Stmt {
                     _ => Stmt::SWhile(cond, s.optimize()),
                 }
             }
+            Stmt::SFor(t, i, e, s) => Stmt::SFor(t, i, e.optimize(), s.optimize()),
             _ => self,
         }
     }
