@@ -1,5 +1,7 @@
 use ast::Func;
 
+use static_analysis::has_return::*;
+
 use code_generation::context::Context;
 use code_generation::generate::*;
 use code_generation::code_generator::*;
@@ -12,7 +14,12 @@ impl GenerateCode<()> for Func {
         for (arg, (arg_addr, t)) in self.args.iter().zip(arg_addr_regs) {
             ctx.set_var(arg.ident.clone(), arg_addr, t);
         }
-        self.body.generate_code(ctx);
+        ctx.in_new_scope(|ctx| {
+            self.body.generate_code(ctx);
+            if !self.body.has_return() {
+                ctx.release_all_strings();
+            }
+        });
         ctx.cg.add_func_end(ret_type);
     }
 }

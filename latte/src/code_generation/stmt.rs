@@ -21,13 +21,25 @@ impl GenerateCode<()> for Stmt {
     fn generate_code(&self, ctx: &mut Context) {
         match *self {
             Stmt::SEmpty => {}
-            Stmt::SBlock(ref stmts) => ctx.in_new_scope(|ctx| stmts.generate_code(ctx)),
+            Stmt::SBlock(ref stmts) => {
+                ctx.in_new_scope(|ctx| {
+                    stmts.generate_code(ctx);
+                    if !stmts.has_return() {
+                        ctx.release_local_strings();
+                    }
+                })
+            }
             Stmt::SDecl(_, ref decls) => {
                 decls.generate_code(ctx);
             }
             Stmt::SAssign(ref ident, ref e) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
                 let (val_reg, _) = e.generate_code(ctx);
+                if t == CGType::new(RawType::TString) {
+                    let val = ctx.cg.add_load(addr_reg, t);
+                    ctx.cg.retain_string(val_reg);
+                    ctx.cg.release_string(Val::Reg(val));
+                }
                 ctx.cg.add_store(addr_reg, t, val_reg);
             }
             Stmt::SInc(ref ident) => {
@@ -44,9 +56,16 @@ impl GenerateCode<()> for Stmt {
             }
             Stmt::SReturnE(ref e) => {
                 let (val, t) = e.generate_code(ctx);
+                if t == CGType::new(RawType::TString) {
+                    ctx.cg.retain_string(val);
+                }
+                ctx.release_all_strings();
                 ctx.cg.add_ret(t, val);
             }
-            Stmt::SReturn => ctx.cg.add_ret_void(),
+            Stmt::SReturn => {
+                ctx.release_all_strings();
+                ctx.cg.add_ret_void();
+            }
             Stmt::SExpr(ref e) => {
                 e.generate_code(ctx);
             }
@@ -58,7 +77,12 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_cond_jump(cond_val, if_label, end_label);
 
                 ctx.cg.add_label(if_label);
-                ctx.in_new_scope(|ctx| s.generate_code(ctx));
+                ctx.in_new_scope(|ctx| {
+                    s.generate_code(ctx);
+                    if !s.has_return() {
+                        ctx.release_local_strings();
+                    }
+                });
                 ctx.cg.add_jump(end_label);
 
                 ctx.cg.add_label(end_label);
@@ -73,13 +97,23 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_cond_jump(cond_val, if_label, else_label);
 
                 ctx.cg.add_label(if_label);
-                ctx.in_new_scope(|ctx| if_true.generate_code(ctx));
+                ctx.in_new_scope(|ctx| {
+                    if_true.generate_code(ctx);
+                    if !if_true.has_return() {
+                        ctx.release_local_strings();
+                    }
+                });
                 if !has_return {
                     ctx.cg.add_jump(end_label);
                 }
 
                 ctx.cg.add_label(else_label);
-                ctx.in_new_scope(|ctx| if_false.generate_code(ctx));
+                ctx.in_new_scope(|ctx| {
+                    if_false.generate_code(ctx);
+                    if !if_false.has_return() {
+                        ctx.release_local_strings();
+                    }
+                });
                 if !has_return {
                     ctx.cg.add_jump(end_label);
                     ctx.cg.add_label(end_label);
@@ -96,7 +130,12 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_cond_jump(cond_val, body_label, end_label);
 
                 ctx.cg.add_label(body_label);
-                ctx.in_new_scope(|ctx| s.generate_code(ctx));
+                ctx.in_new_scope(|ctx| {
+                    s.generate_code(ctx);
+                    if !s.has_return() {
+                        ctx.release_local_strings();
+                    }
+                });
                 ctx.cg.add_jump(cond_label);
 
                 ctx.cg.add_label(end_label);
@@ -128,8 +167,19 @@ impl GenerateCode<()> for Stmt {
                 ctx.in_new_scope(|mut ctx| {
                     let (elem_addr, elem_t) = ctx.cg
                         .get_nth_arr_elem(arr, arr_t, Val::Reg(idx_reg));
-                    ctx.set_var(ident.clone(), elem_addr, elem_t);
+                    let loop_var_addr = ctx.cg.add_alloca(elem_t);
+                    let val = Val::Reg(ctx.cg.add_load(elem_addr, elem_t));
+                    ctx.cg.add_store(loop_var_addr, elem_t, val);
+                    ctx.set_var(ident.clone(), loop_var_addr, elem_t);
+
+                    if elem_t == CGType::new(RawType::TString) {
+                        ctx.cg.retain_string(val);
+                    }
+
                     stmt.generate_code(&mut ctx);
+                    if !stmt.has_return() {
+                        ctx.release_local_strings();
+                    }
                 });
 
                 ctx.cg.add_jump(loop_end);
@@ -158,6 +208,9 @@ impl GenerateCode<()> for VarDecl {
                 let t = CGType::from(t);
                 let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = e.generate_code(ctx);
+                if t == CGType::new(RawType::TString) {
+                    ctx.cg.retain_string(val_reg);
+                }
                 ctx.cg.add_store(addr_reg, t, val_reg);
                 ctx.set_var(ident.clone(), addr_reg, t);
             }
@@ -172,6 +225,9 @@ impl GenerateCode<()> for VarDecl {
                 let t = CGType::from(t);
                 let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = Expr::ELit(default_lit).generate_code(ctx);
+                if t == CGType::new(RawType::TString) {
+                    ctx.cg.retain_string(val_reg);
+                }
                 ctx.cg.add_store(addr_reg, t, val_reg);
                 ctx.set_var(ident.clone(), addr_reg, t);
             }

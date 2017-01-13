@@ -6,10 +6,13 @@ use code_generation::generate::*;
 
 impl GenerateCode<(Val, CGType)> for Expr {
     fn generate_code(&self, ctx: &mut Context) -> (Val, CGType) {
-        match *self {
+        let (reg, t) = match *self {
             Expr::EVar(ref ident) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
                 let val = ctx.cg.add_load(addr_reg, t);
+                if t == CGType::new(RawType::TString) {
+                    ctx.cg.retain_string(Val::Reg(val));
+                }
                 (Val::Reg(val), t)
             }
             Expr::ELit(ref lit) => lit.generate_code(ctx),
@@ -45,7 +48,11 @@ impl GenerateCode<(Val, CGType)> for Expr {
                 let reg = ctx.cg.new_arr(arr_t, size_val);
                 (Val::Reg(reg), arr_t)
             }
+        };
+        if t == CGType::new(RawType::TString) {
+            ctx.add_string_tmp(reg);
         }
+        (reg, t)
     }
 }
 
