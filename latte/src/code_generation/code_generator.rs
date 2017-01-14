@@ -25,6 +25,7 @@ impl CodeGenerator {
             current_label: Label(-1),
         };
 
+        cg.add_comment(format!("internal functions"));
         cg.add_func_declare(CGType::new(RawType::TRawPtr),
                             &format!(".concatenate"),
                             &vec![CGType::new(RawType::TRawPtr), CGType::new(RawType::TRawPtr)]);
@@ -40,6 +41,7 @@ impl CodeGenerator {
         cg.add_func_declare(CGType::new(RawType::TRawPtr),
                             &format!("malloc"),
                             &vec![CGType::new(RawType::TInt)]);
+        cg.add_empty_line();
         cg
     }
 
@@ -87,32 +89,41 @@ impl CodeGenerator {
     }
 
     pub fn add_add_str(&mut self, lhs: Val, rhs: Val) -> Register {
+        let str_t = CGType::new(RawType::TString);
         self.add_comment(format!("Getting lhs string"));
-        let lhs_str_ptr = self.get_field_addr(lhs, CGType::new(RawType::TString), 1);
+        let lhs_str_ptr = self.get_field_addr(lhs, str_t, 1);
         let lhs_str = self.add_raw_load(lhs_str_ptr, format!("i8*"));
         self.add_comment(format!("Getting rhs string"));
-        let rhs_str_ptr = self.get_field_addr(rhs, CGType::new(RawType::TString), 1);
+        let rhs_str_ptr = self.get_field_addr(rhs, str_t, 1);
         let rhs_str = self.add_raw_load(rhs_str_ptr, format!("i8*"));
         self.add_comment(format!("Concatenate"));
         let new_str =
             self.new_reg(format!("call i8* @.concatenate(i8* %{}, i8* %{})", lhs_str, rhs_str));
 
-        let str_t = CGType::new(RawType::TString);
-        let struct_ptr = self.add_malloc1(str_t.native_type());
-
-        self.add_comment(format!("Constructing string struct"));
-        let reg = self.new_reg(format!("insertvalue {} undef, i32 1, 0", str_t.native_type()));
-        let reg = self.new_reg(format!("insertvalue {} %{}, i8* %{}, 1",
-                                       str_t.native_type(),
-                                       reg,
-                                       new_str));
-        self.add_comment(format!("Storing string structure"));
-        self.add_raw_store(struct_ptr, str_t.native_type(), reg);
+        let struct_ptr = self.alloc_string();
+        self.retain_string(Val::Reg(struct_ptr));
+        let str_ptr_addr = self.get_field_addr(Val::Reg(struct_ptr), str_t, 1);
+        self.add_raw_store(str_ptr_addr, format!("i8*"), Val::Reg(new_str));
         struct_ptr
     }
 
     pub fn add_loop_step(&mut self, new_idx: Register, old_idx: Register) {
         self.add_line(format!("%{} = add i32 1, %{}", new_idx, old_idx));
+    }
+
+    // object
+    pub fn add_class_declare(&mut self, class_id: usize, fields: &Vec<CGType>) {
+        self.add_line_no_indent(format!("%class_{} = type {{ {} }}",
+                                        class_id,
+                                        join(fields, ',', CGType::user_type)));
+    }
+
+    pub fn get_field_addr(&mut self, struct_ptr: Val, t: CGType, idx: usize) -> Register {
+        self.new_reg(format!("getelementptr {}, {}* {}, i32 0, i32 {}",
+                             t.native_type(),
+                             t.native_type(),
+                             struct_ptr,
+                             idx))
     }
 
     // function
@@ -221,16 +232,25 @@ impl CodeGenerator {
                                            str_size + 1,
                                            str_const));
         let str_t = CGType::new(RawType::TString);
-        let struct_ptr = self.add_malloc1(str_t.native_type());
+        let struct_ptr = self.alloc_string();
+        self.retain_string(Val::Reg(struct_ptr));
+        let addr = self.get_field_addr(Val::Reg(struct_ptr), str_t, 1);
+        self.add_raw_store(addr, format!("i8*"), Val::Reg(str_ptr));
+        let addr = self.get_field_addr(Val::Reg(struct_ptr), str_t, 2);
+        self.add_raw_store(addr, format!("i1"), Val::Int(1));
+        struct_ptr
+    }
 
-        self.add_comment(format!("Constructing string struct"));
-        let reg = self.new_reg(format!("insertvalue {} undef, i32 2, 0", str_t.native_type()));
-        let reg = self.new_reg(format!("insertvalue {} %{}, i8* %{}, 1",
-                                       str_t.native_type(),
-                                       reg,
-                                       str_ptr));
-        self.add_comment(format!("Storing string structure"));
-        self.add_raw_store(struct_ptr, str_t.native_type(), reg);
+    pub fn alloc_string(&mut self) -> Register {
+        self.add_comment(format!("Allocating empty string"));
+        let str_t = CGType::new(RawType::TString);
+        let struct_ptr = self.add_malloc1(str_t.native_type());
+        let reg = self.new_reg(format!("insertvalue {} undef, i32 0, 0", str_t.native_type()));
+        let reg =
+            self.new_reg(format!("insertvalue {} %{}, i8* null, 1", str_t.native_type(), reg));
+        let reg =
+            self.new_reg(format!("insertvalue {} %{}, i1 false, 2", str_t.native_type(), reg));
+        self.add_raw_store(struct_ptr, str_t.native_type(), Val::Reg(reg));
         struct_ptr
     }
 
@@ -259,7 +279,7 @@ impl CodeGenerator {
                                        arr_t.t.user_type(),
                                        arr_ptr));
         self.add_comment(format!("Storing array"));
-        self.add_raw_store(struct_ptr, arr_t.native_type(), reg);
+        self.add_raw_store(struct_ptr, arr_t.native_type(), Val::Reg(reg));
 
         if arr_t.t == RawType::TString {
             self.add_call(CGType::new(RawType::TVoid),
@@ -302,14 +322,6 @@ impl CodeGenerator {
         (elem_ptr, CGType::new(t.t))
     }
 
-    pub fn get_field_addr(&mut self, struct_ptr: Val, t: CGType, idx: i32) -> Register {
-        self.new_reg(format!("getelementptr {}, {}* {}, i32 0, i32 {}",
-                             t.native_type(),
-                             t.native_type(),
-                             struct_ptr,
-                             idx))
-    }
-
     pub fn add_alloca(&mut self, t: CGType) -> Register {
         self.new_reg(format!("alloca {}", t))
     }
@@ -326,8 +338,8 @@ impl CodeGenerator {
         self.add_line(format!("store {} {}, {}* %{}", t, val, t, addr_reg));
     }
 
-    fn add_raw_store(&mut self, addr_reg: Register, t: String, val: Register) {
-        self.add_line(format!("store {} %{}, {}* %{}", t, val, t, addr_reg));
+    fn add_raw_store(&mut self, addr_reg: Register, t: String, val: Val) {
+        self.add_line(format!("store {} {}, {}* %{}", t, val, t, addr_reg));
     }
 
     // generating registers
@@ -377,7 +389,7 @@ impl CodeGenerator {
 
     // core functions
     pub fn add_comment(&mut self, s: String) {
-        self.add_line(format!("; {}", s));
+        self.add_line_no_indent(format!("; {}", s));
     }
 
     fn add_line(&mut self, s: String) {
@@ -388,6 +400,10 @@ impl CodeGenerator {
     fn add_line_no_indent(&mut self, s: String) {
         self.br_last_op = false;
         self.out.push(s);
+    }
+
+    pub fn add_empty_line(&mut self) {
+        self.out.push(format!(""));
     }
 }
 
@@ -528,7 +544,7 @@ impl RawType {
         match self {
             RawType::TInt => format!("i32"),
             RawType::TBool => format!("i1"),
-            RawType::TString => format!("{{ i32, i8* }}"),
+            RawType::TString => format!("{{ i32, i8*, i1 }}"), // ref_count, char*, is_const
             RawType::TVoid => format!("void"),
             RawType::TRawPtr => format!("i8*"),
         }
