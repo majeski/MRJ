@@ -183,7 +183,10 @@ impl GenerateCode<(Val, CGType)> for Lit {
                 let val = ctx.cg.add_str_load(s.len(), reg);
                 (Val::Reg(val), CGType::new(RawType::TString))
             }
-            Lit::LNull(..) => (Val::Null, CGType::new(RawType::TNull)),
+            Lit::LNull(None) => (Val::Null, CGType::new(RawType::TNull)),
+            Lit::LNull(Some(ref cname)) => {
+                (Val::Null, ctx.to_cgtype(&Type::TObject(cname.clone())))
+            }
         }
     }
 }
