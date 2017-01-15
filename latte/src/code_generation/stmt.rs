@@ -55,7 +55,8 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_store(addr_reg, t, Val::Reg(val_reg));
             }
             Stmt::SReturnE(ref e) => {
-                let (val, t) = e.generate_code(ctx);
+                let (val, _) = e.generate_code(ctx);
+                let t = ctx.ret_type;
                 if t == CGType::new(RawType::TString) {
                     ctx.cg.retain_string(val);
                 }

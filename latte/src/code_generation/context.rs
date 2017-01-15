@@ -6,17 +6,18 @@ use code_generation::code_generator::*;
 
 #[derive(Debug)]
 pub struct Context {
-    pub vars: HashMap<Ident, (Register, CGType)>,
-    pub func_types: HashMap<Ident, (Vec<CGType>, CGType)>,
-    pub string_lits: HashMap<String, StrConstant>,
+    vars: HashMap<Ident, (Register, CGType)>,
+    func_types: HashMap<Ident, (Vec<CGType>, CGType)>,
+    string_lits: HashMap<String, StrConstant>,
+    pub ret_type: CGType,
 
     classes: HashMap<usize, ClassData>,
-    pub class_ids: HashMap<Ident, usize>,
+    class_ids: HashMap<Ident, usize>,
 
-    pub string_tmps: Vec<Val>,
-    pub local_string_tmps: Vec<Val>,
-    pub string_vars: Vec<Register>,
-    pub local_string_vars: Vec<Register>,
+    string_tmps: Vec<Val>,
+    local_string_tmps: Vec<Val>,
+    string_vars: Vec<Register>,
+    local_string_vars: Vec<Register>,
 
     pub cg: CodeGenerator,
 }
@@ -60,6 +61,7 @@ impl Context {
             vars: HashMap::new(),
             func_types: HashMap::new(),
             string_lits: HashMap::new(),
+            ret_type: CGType::new(RawType::TVoid),
 
             classes: HashMap::new(),
             class_ids: HashMap::new(),
