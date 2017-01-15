@@ -128,15 +128,7 @@ impl CodeGenerator {
 
     // function
     pub fn add_func_declare(&mut self, ret_type: CGType, func_name: &String, args: &Vec<CGType>) {
-        let mut args_str = String::new();
-        for arg in args {
-            let arg_str = format!("{}", arg);
-            args_str = if args_str.is_empty() {
-                arg_str
-            } else {
-                format!("{}, {}", args_str, arg_str)
-            };
-        }
+        let args_str = join(args, ',', CGType::user_type);
         self.add_line_no_indent(format!("declare {} @{}({})", ret_type, func_name, args_str));
     }
 
@@ -146,18 +138,12 @@ impl CodeGenerator {
                           args: &Vec<CGType>)
                           -> Vec<(Register, CGType)> {
         let mut arg_regs: Vec<(Register, CGType)> = Vec::new();
-        let mut args_str = String::new();
         for arg_t in args {
             let reg = self.next_reg();
-            let arg_str = format!("{} %{}", arg_t, reg);
-            args_str = if args_str.is_empty() {
-                arg_str
-            } else {
-                format!("{}, {}", args_str, arg_str)
-            };
             arg_regs.push((reg, *arg_t));
         }
 
+        let args_str = join(&arg_regs, ',', |(reg, arg_t)| format!("{} %{}", arg_t, reg));
         self.add_line_no_indent(format!("define {} @{}({}) {}",
                                         ret_type,
                                         func_name,
@@ -194,16 +180,7 @@ impl CodeGenerator {
                     func_name: &String,
                     args: &Vec<(Val, CGType)>)
                     -> Register {
-        let mut args_str = String::new();
-        for arg in args {
-            let arg_str = format!("{} {}", arg.1, arg.0);
-            args_str = if args_str.is_empty() {
-                arg_str
-            } else {
-                format!("{}, {}", args_str, arg_str)
-            };
-        }
-
+        let args_str = join(args, ',', |(val, val_t)| format!("{} {}", val_t, val));
         let call_str = format!("call {} @{}({})", ret_type, func_name, args_str);
         if ret_type == CGType::new(RawType::TVoid) {
             self.add_line(call_str);
@@ -288,6 +265,10 @@ impl CodeGenerator {
         }
 
         struct_ptr
+    }
+
+    pub fn new_object(&mut self, t: CGType) -> Register {
+        self.add_malloc1(t.native_type())
     }
 
     fn add_malloc1(&mut self, t: String) -> Register {
@@ -411,6 +392,7 @@ impl CodeGenerator {
 pub enum Val {
     Reg(Register),
     Int(i32),
+    Null,
 }
 
 impl Val {
@@ -427,6 +409,7 @@ impl fmt::Display for Val {
         match *self {
             Val::Reg(ref r) => write!(f, "%{}", r),
             Val::Int(x) => write!(f, "{}", x),
+            Val::Null => write!(f, "null"),
         }
     }
 }
@@ -471,6 +454,8 @@ pub enum RawType {
     TVoid,
     TString,
     TRawPtr,
+    TObject(usize),
+    TNull,
 }
 
 impl fmt::Display for CGType {
@@ -519,7 +504,7 @@ impl CGType {
 }
 
 impl RawType {
-    pub fn from(t: &Type) -> RawType {
+    fn from(t: &Type) -> RawType {
         match *t {
             Type::TInt => RawType::TInt,
             Type::TBool => RawType::TBool,
@@ -535,7 +520,8 @@ impl RawType {
 
     fn user_type(self) -> String {
         match self {
-            RawType::TString => format!("{}*", self.native_type()),
+            RawType::TString |
+            RawType::TObject(_) => format!("{}*", self.native_type()),
             _ => format!("{}", self.native_type()),
         }
     }
@@ -547,6 +533,8 @@ impl RawType {
             RawType::TString => format!("{{ i32, i8*, i1 }}"), // ref_count, char*, is_const
             RawType::TVoid => format!("void"),
             RawType::TRawPtr => format!("i8*"),
+            RawType::TObject(x) => format!("%class_{}", x),
+            RawType::TNull => panic!("null is not a valid type"),
         }
     }
 }

@@ -189,6 +189,7 @@ impl fmt::Display for Expr {
             Expr::ENeg(ref e) => format!("-{}", *e),
             Expr::ENot(ref e) => format!("!{}", *e),
             Expr::EBinOp(ref lhs, ref op, ref rhs) => format!("({} {} {})", *lhs, op, *rhs),
+            Expr::ENew(ref t) => format!("new {}", t),
             Expr::ENewArray(ref t, ref size) => format!("new {}[{}]", t, *size),
         };
         write!(f, "{}", s)
@@ -202,7 +203,8 @@ impl fmt::Display for Lit {
             Lit::LTrue => format!("true"),
             Lit::LFalse => format!("false"),
             Lit::LString(ref s) => format!("\"{}\"", s),
-            Lit::LNull => format!("null"),
+            Lit::LNull(None) => format!("null"),
+            Lit::LNull(Some(ref s)) => format!("({})null", s),
         };
         write!(f, "{}", s)
     }

@@ -55,7 +55,7 @@ impl Optimize for Expr {
                                 true => rhs,
                                 false => Expr::ENot(Box::new(rhs)),
                             }
-                        },
+                        }
                         Operator::OpNEq => {
                             match l {
                                 true => Expr::ENot(Box::new(rhs)),
@@ -81,6 +81,11 @@ impl Optimize for Expr {
                     match op {
                         Operator::OpEq => Expr::ELit(to_lit(l == r)),
                         Operator::OpNEq => Expr::ELit(to_lit(l != r)),
+                        _ => unreachable!(),
+                    }
+                } else if is_null(&lhs) && is_null(&rhs) {
+                    match op {
+                        Operator::OpEq | Operator::OpNEq => Expr::ELit(to_lit(true)),
                         _ => unreachable!(),
                     }
                 } else {
@@ -155,4 +160,11 @@ fn is_safe_op(op: Operator, rhs: &Expr) -> bool {
 
 fn is_safe_str_op(op: Operator) -> bool {
     op == Operator::OpEq || op == Operator::OpNEq
+}
+
+fn is_null(e: &Expr) -> bool {
+    match *e {
+        Expr::ELit(Lit::LNull(..)) => true,
+        _ => false,
+    }
 }

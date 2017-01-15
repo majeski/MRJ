@@ -16,7 +16,7 @@ extern "C" {
     static EXPR_TYPE_LIT_INT: c_int;
     static EXPR_TYPE_LIT_NULL: c_int;
     static EXPR_TYPE_LIT_STR: c_int;
-    static EXPR_TYPE_NEW_ARR: c_int;
+    static EXPR_TYPE_NEW: c_int;
     static EXPR_TYPE_UNARY: c_int;
 }
 
@@ -45,8 +45,8 @@ impl ToAst<Expr> for expr_t {
             if self.t == EXPR_TYPE_BINOP {
                 return (self.ptr as *mut expr_binop_t).to_ast();
             }
-            if self.t == EXPR_TYPE_NEW_ARR {
-                return (self.ptr as *mut expr_new_array_t).to_ast();
+            if self.t == EXPR_TYPE_NEW {
+                return (self.ptr as *mut expr_new_t).to_ast();
             }
         }
         return Err(format!("Unknown expression type: {}", self.t));
@@ -133,7 +133,11 @@ impl ToAst<Expr> for expr_lit_t {
     fn to_ast(&self) -> TAResult<Expr> {
         let lit = unsafe {
             if self.t == EXPR_TYPE_LIT_NULL {
-                Lit::LNull
+                if self.lit.is_null() {
+                    Lit::LNull(None)
+                } else {
+                    Lit::LNull(Some(self.lit.to_ast()?))
+                }
             } else {
                 let lit_str: String = self.lit.to_ast()?;
                 if self.t == EXPR_TYPE_LIT_INT {
@@ -160,13 +164,18 @@ impl ToAst<Expr> for expr_lit_t {
 }
 
 #[repr(C)]
-struct expr_new_array_t {
+struct expr_new_t {
     t: *mut c_char,
     size: *mut expr_t,
 }
 
-impl ToAst<Expr> for expr_new_array_t {
+impl ToAst<Expr> for expr_new_t {
     fn to_ast(&self) -> TAResult<Expr> {
-        Ok(Expr::ENewArray(self.t.to_ast()?, Box::new(self.size.to_ast()?)))
+        let t = self.t.to_ast()?;
+        Ok(if self.size.is_null() {
+            Expr::ENew(t)
+        } else {
+            Expr::ENewArray(t, Box::new(self.size.to_ast()?))
+        })
     }
 }

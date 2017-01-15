@@ -205,7 +205,7 @@ impl GenerateCode<()> for VarDecl {
     fn generate_code(&self, ctx: &mut Context) {
         match *self {
             VarDecl::Init(ref t, ref ident, ref e) => {
-                let t = CGType::from(t);
+                let t = ctx.to_cgtype(t);
                 let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = e.generate_code(ctx);
                 if t == CGType::new(RawType::TString) {
@@ -219,10 +219,10 @@ impl GenerateCode<()> for VarDecl {
                     Type::TInt => Lit::LInt(0),
                     Type::TBool => Lit::LFalse,
                     Type::TString => Lit::LString(String::new()),
-                    Type::TObject(..) => Lit::LNull,
+                    Type::TObject(..) => Lit::LNull(None),
                     _ => unreachable!(),
                 };
-                let t = CGType::from(t);
+                let t = ctx.to_cgtype(t);
                 let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = Expr::ELit(default_lit).generate_code(ctx);
                 if t == CGType::new(RawType::TString) {

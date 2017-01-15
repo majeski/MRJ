@@ -9,3 +9,17 @@ fn char_to_hex(c: u8) -> String {
 fn concat(l: String, r: String) -> String {
     format!("{}{}", l, r)
 }
+
+pub fn join<T: Copy, F>(v: &Vec<T>, c: char, f: F) -> String
+    where F: Fn(T) -> String
+{
+    let mut res = String::new();
+    for e in v {
+        res = if res.is_empty() {
+            format!("{}", f(*e))
+        } else {
+            format!("{}{} {}", res, c, f(*e))
+        };
+    }
+    res
+}

@@ -118,6 +118,10 @@ impl TypeError {
         Self::new(format!("Cannot access field for type '{}'", t))
     }
 
+    pub fn invalid_new(t: &Type) -> TypeError {
+        Self::new(format!("cannot create instance of type '{}'", t))
+    }
+
     // ctor
 
     fn new(msg: String) -> TypeError {

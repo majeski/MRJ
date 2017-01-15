@@ -335,7 +335,9 @@ impl<'a> HasType<Type, &'a TypeContext> for Expr {
                         expect_type(&Type::TInt, &rhs_t, ctx)?;
                         Ok(Type::TBool)
                     }
-                    Operator::OpEq | Operator::OpNEq => check_eq_types(lhs_t, rhs_t),
+                    Operator::OpEq | Operator::OpNEq => {
+                        check_eq_types(lhs_t, rhs_t, ctx).map(|_| Type::TBool)
+                    }
                     Operator::OpOr | Operator::OpAnd => {
                         expect_type(&Type::TBool, &lhs_t, ctx)?;
                         expect_type(&Type::TBool, &rhs_t, ctx)?;
@@ -343,8 +345,16 @@ impl<'a> HasType<Type, &'a TypeContext> for Expr {
                     }
                 }
             }
+            Expr::ENew(ref t) => {
+                expect_declarable_type(t, ctx)?;
+                if let Type::TObject(..) = *t {
+                    Ok(t.clone())
+                } else {
+                    Err(TypeError::invalid_new(t))
+                }
+            }
             Expr::ENewArray(ref t, ref size) => {
-                expect_declarable_type(t, &ctx)?;
+                expect_declarable_type(t, ctx)?;
                 expect_type(&Type::TInt, &size.check_types(ctx)?, ctx)?;
                 Ok(Type::TArray(Box::new(t.clone())))
             }
@@ -377,21 +387,28 @@ fn check_add_types(lhs_t: Type, rhs_t: Type) -> TypeResult<Type> {
     }
 }
 
-fn check_eq_types(lhs_t: Type, rhs_t: Type) -> TypeResult<Type> {
-    if lhs_t != rhs_t || (lhs_t != Type::TInt && lhs_t != Type::TString && lhs_t != Type::TBool) {
-        Err(TypeError::no_operator(Operator::OpEq, lhs_t, rhs_t))
+fn check_eq_types(lhs_t: Type, rhs_t: Type, ctx: &TypeContext) -> TypeResult<()> {
+    if (lhs_t == Type::TNull && rhs_t == Type::TNull) || conforms_lsp(&lhs_t, &rhs_t, ctx) ||
+       conforms_lsp(&rhs_t, &lhs_t, ctx) ||
+       (lhs_t == rhs_t && (lhs_t == Type::TInt || lhs_t == Type::TBool || lhs_t == Type::TString)) {
+        Ok(())
     } else {
-        Ok(Type::TBool)
+        Err(TypeError::no_operator(Operator::OpEq, lhs_t, rhs_t))
     }
 }
 
 impl<'a> HasType<Type, &'a TypeContext> for Lit {
-    fn do_check_types(&self, _: &TypeContext) -> TypeResult<Type> {
+    fn do_check_types(&self, ctx: &TypeContext) -> TypeResult<Type> {
         Ok(match *self {
             Lit::LInt(_) => Type::TInt,
             Lit::LTrue | Lit::LFalse => Type::TBool,
             Lit::LString(_) => Type::TString,
-            Lit::LNull => Type::TNull,
+            Lit::LNull(None) => Type::TNull,
+            Lit::LNull(Some(ref cname)) => {
+                let t = Type::TObject(cname.clone());
+                expect_valid_type(&t, ctx)?;
+                t
+            }  
         })
     }
 }

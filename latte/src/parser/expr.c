@@ -8,7 +8,7 @@ const int EXPR_TYPE_LIT_BOOL = 4;
 const int EXPR_TYPE_LIT_INT = 5;
 const int EXPR_TYPE_LIT_NULL = 6;
 const int EXPR_TYPE_LIT_STR = 7;
-const int EXPR_TYPE_NEW_ARR = 8;
+const int EXPR_TYPE_NEW = 8;
 const int EXPR_TYPE_UNARY = 9;
 
 struct expr_t *expr_create(int32_t type, void *e);
@@ -51,12 +51,12 @@ struct expr_t *expr_lit_create(int32_t type, char *lit) {
   return expr_create(EXPR_TYPE_LIT, e);
 }
 
-struct expr_t *expr_new_array_create(char *type, struct expr_t *size) {
-  struct expr_new_arr_t *e = malloc(sizeof(struct expr_new_arr_t));
+struct expr_t *expr_new_create(char *type, struct expr_t *size) {
+  struct expr_new_t *e = malloc(sizeof(struct expr_new_t));
   CHECK_NULL(e);
   e->type = type;
   e->size = size;
-  return expr_create(EXPR_TYPE_NEW_ARR, e);
+  return expr_create(EXPR_TYPE_NEW, e);
 }
 
 struct expr_t *expr_create(int32_t type, void *e) {
@@ -94,8 +94,8 @@ void expr_free(void *ptr) {
   } else if (type == EXPR_TYPE_LIT) {
     struct expr_lit_t *expr = (struct expr_lit_t *)e;
     free(expr->lit);
-  } else if (type == EXPR_TYPE_NEW_ARR) {
-    struct expr_new_arr_t *expr = (struct expr_new_arr_t *)e;
+  } else if (type == EXPR_TYPE_NEW) {
+    struct expr_new_t *expr = (struct expr_new_t *)e;
     free(expr->type);
     expr_free(expr->size);
   } else {

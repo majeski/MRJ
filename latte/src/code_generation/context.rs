@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 
-use ast::Ident;
+use ast::{Type, Ident};
 
 use code_generation::code_generator::*;
 
 #[derive(Debug)]
 pub struct Context {
     pub vars: HashMap<Ident, (Register, CGType)>,
-    pub func_ret_types: HashMap<Ident, CGType>,
+    pub func_types: HashMap<Ident, (Vec<CGType>, CGType)>,
     pub string_lits: HashMap<String, StrConstant>,
+
+    classes: HashMap<usize, ClassData>,
+    pub class_ids: HashMap<Ident, usize>,
 
     pub string_tmps: Vec<Val>,
     pub local_string_tmps: Vec<Val>,
@@ -18,12 +21,48 @@ pub struct Context {
     pub cg: CodeGenerator,
 }
 
+#[derive(Debug, Clone)]
+pub struct ClassData {
+    pub id: usize,
+    pub ident: Ident,
+    pub fields: Vec<CGType>,
+    pub field_ids: HashMap<Ident, usize>,
+}
+
+impl ClassData {
+    pub fn new(id: usize, ident: &Ident) -> ClassData {
+        ClassData {
+            id: id,
+            ident: ident.clone(),
+            fields: Vec::new(),
+            field_ids: HashMap::new(),
+        }
+    }
+
+    pub fn add_field(&mut self, ident: &Ident, t: CGType) {
+        let id = self.fields.len();
+        self.field_ids.insert(ident.clone(), id);
+        self.fields.push(t);
+    }
+
+    pub fn get_field_type(&self, ident: &Ident) -> CGType {
+        self.fields[self.get_field_id(ident)]
+    }
+
+    pub fn get_field_id(&self, ident: &Ident) -> usize {
+        *self.field_ids.get(ident).unwrap()
+    }
+}
+
 impl Context {
-    pub fn new(func_ret_types: HashMap<Ident, CGType>) -> Context {
+    pub fn new() -> Context {
         Context {
             vars: HashMap::new(),
-            func_ret_types: func_ret_types,
+            func_types: HashMap::new(),
             string_lits: HashMap::new(),
+
+            classes: HashMap::new(),
+            class_ids: HashMap::new(),
 
             string_tmps: Vec::new(),
             local_string_tmps: Vec::new(),
@@ -55,8 +94,12 @@ impl Context {
         res
     }
 
+    pub fn get_arg_types(&self, ident: &Ident) -> Vec<CGType> {
+        self.func_types.get(ident).unwrap().0.clone()
+    }
+
     pub fn get_ret_type(&self, ident: &Ident) -> CGType {
-        *self.func_ret_types.get(ident).unwrap()
+        self.func_types.get(ident).unwrap().1
     }
 
     pub fn get_str_const(&self, s: &String) -> StrConstant {
@@ -79,6 +122,11 @@ impl Context {
         }
     }
 
+    pub fn add_func(&mut self, ident: &Ident, arg_types: Vec<CGType>, ret_type: CGType) {
+        self.func_types.insert(ident.clone(), (arg_types, ret_type));
+    }
+
+    // string reference counting
     pub fn add_string_tmp(&mut self, reg: Val) {
         self.string_tmps.push(reg);
         self.local_string_tmps.push(reg);
@@ -109,6 +157,29 @@ impl Context {
         for var_addr in var_addrs {
             let val = self.cg.add_load(var_addr, str_t);
             self.cg.release_string(Val::Reg(val));
+        }
+    }
+
+    // class
+    pub fn add_class(&mut self, id: usize, cdata: ClassData) {
+        let cname = cdata.ident.clone();
+        self.cg.add_comment(format!("class {}", cname));
+        self.cg.add_class_declare(id, &cdata.fields);
+        self.classes.insert(id, cdata);
+        self.class_ids.insert(cname, id);
+    }
+
+    pub fn get_class_data(&self, id: usize) -> &ClassData {
+        self.classes.get(&id).unwrap()
+    }
+
+    pub fn to_cgtype(&self, t: &Type) -> CGType {
+        match *t {
+            Type::TObject(ref cname) => {
+                CGType::new(RawType::TObject(*self.class_ids.get(cname).unwrap()))
+            }
+            Type::TArray(ref elem_t) => CGType::new_arr(self.to_cgtype(elem_t).t),
+            _ => CGType::from(t),
         }
     }
 }

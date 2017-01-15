@@ -86,6 +86,7 @@ pub enum Expr {
     ENeg(Box<Expr>),
     ENot(Box<Expr>),
     EBinOp(Box<Expr>, Operator, Box<Expr>),
+    ENew(Type),
     ENewArray(Type, Box<Expr>),
 }
 
@@ -95,7 +96,7 @@ pub enum Lit {
     LTrue,
     LFalse,
     LString(String),
-    LNull,
+    LNull(Option<Ident>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -13,14 +13,17 @@ impl GenerateCode<(Register, CGType)> for FieldGet {
                 let (idx_val, _) = idx.generate_code(ctx);
                 ctx.cg.get_nth_arr_elem(struct_ptr, arr_t, idx_val)
             }
-            FieldGet::Indirect(ref expr, _) => {
+            FieldGet::Indirect(ref expr, ref field) => {
                 let (struct_addr, struct_type) = expr.generate_code(ctx);
                 if struct_type.is_arr {
-                    return (ctx.cg.get_field_addr(struct_addr, struct_type, 0),
-                            CGType::new(RawType::TInt));
+                    (ctx.cg.get_field_addr(struct_addr, struct_type, 0), CGType::new(RawType::TInt))
+                } else if let RawType::TObject(id) = struct_type.t {
+                    let field_t = ctx.get_class_data(id).get_field_type(field);
+                    let field_id = ctx.get_class_data(id).get_field_id(field);
+                    (ctx.cg.get_field_addr(struct_addr, struct_type, field_id), field_t)
+                } else {
+                    unreachable!()
                 }
-
-                unimplemented!() // TODO
             }
         }
     }
