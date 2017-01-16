@@ -155,7 +155,10 @@ impl<'a> HasType<(), &'a TypeContext> for Class {
     }
 
     fn do_check_types(&self, ctx: &TypeContext) -> TypeResult<()> {
-        ctx.in_class_scope(&self.name, true, |ctx| {
+        ctx.in_class_scope(&self.name, true, |mut ctx| {
+            add_ident(&Ident(format!("self")),
+                      &Type::TObject(self.name.clone()),
+                      &mut ctx)?;
             for f in &self.methods {
                 ctx.in_function_scope(&f.ret_type, |mut ctx| f.check_types(&mut ctx))?;
             }

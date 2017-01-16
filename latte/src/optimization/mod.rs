@@ -1,6 +1,7 @@
 use ast::{Def, Program};
 
 mod def;
+mod class;
 mod expr;
 mod func;
 mod optimize;

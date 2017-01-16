@@ -6,7 +6,7 @@ impl Optimize for Def {
     fn optimize(self) -> Def {
         match self {
             Def::DFunc(f) => Def::DFunc(f.optimize()),
-            Def::DClass(c) => Def::DClass(c), // TODO
+            Def::DClass(c) => Def::DClass(c.optimize()),
         }
     }
 }
