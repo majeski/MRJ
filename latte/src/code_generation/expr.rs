@@ -149,8 +149,30 @@ fn generate_eq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
         return (Val::Int(1), CGType::new(RawType::TBool));
     }
 
+    if let (RawType::TObject(lhs_id), RawType::TObject(rhs_id)) = (t1.t, t2.t) {
+        return generate_objects_eq(lhs_val, lhs_id, rhs_val, rhs_id, ctx);
+    }
+
     let t = if t1 != null_t { t1 } else { t2 };
     let result = ctx.cg.add_op(t, lhs_val, Operator::OpEq, rhs_val);
+    (Val::Reg(result), CGType::new(RawType::TBool))
+}
+
+fn generate_objects_eq(mut lhs: Val, lhs_id: usize, mut rhs: Val, rhs_id: usize, ctx: &mut Context) -> (Val, CGType) {
+    let lhs_t = CGType::new(RawType::TObject(lhs_id));
+    let rhs_t = CGType::new(RawType::TObject(rhs_id));
+    let mut t = lhs_t;
+    if lhs_id != rhs_id {
+        if ctx.is_subclass_of(lhs_id, rhs_id) {
+            lhs = Val::Reg(ctx.cg.bitcast_object(lhs, lhs_t, rhs_t));
+            t = rhs_t;
+        } else if ctx.is_subclass_of(rhs_id, lhs_id) {
+            rhs = Val::Reg(ctx.cg.bitcast_object(rhs, rhs_t, lhs_t));
+            t = lhs_t;
+        }
+    }
+
+    let result = ctx.cg.add_op(t, lhs, Operator::OpEq, rhs);
     (Val::Reg(result), CGType::new(RawType::TBool))
 }
 

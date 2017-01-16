@@ -205,6 +205,13 @@ impl Context {
         self.classes.get(&id).unwrap()
     }
 
+    pub fn is_subclass_of(&self, mut id: usize, super_id: usize) -> bool {
+        while self.get_class_data(id).super_id.is_some() && id != super_id {
+            id = self.get_class_data(id).get_super();
+        }
+        id == super_id
+    }
+
     pub fn to_cgtype(&self, t: &Type) -> CGType {
         match *t {
             Type::TObject(ref cname) => {
