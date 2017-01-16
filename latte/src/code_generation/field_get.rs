@@ -14,10 +14,20 @@ impl GenerateCode<(Register, CGType)> for FieldGet {
                 ctx.cg.get_nth_arr_elem(struct_ptr, arr_t, idx_val)
             }
             FieldGet::Indirect(ref expr, ref field) => {
-                let (struct_addr, struct_type) = expr.generate_code(ctx);
+                let (mut struct_addr, mut struct_type) = expr.generate_code(ctx);
                 if struct_type.is_arr {
                     (ctx.cg.get_field_addr(struct_addr, struct_type, 0), CGType::new(RawType::TInt))
-                } else if let RawType::TObject(id) = struct_type.t {
+                } else if let RawType::TObject(mut id) = struct_type.t {
+                    let mut new_struct_type = struct_type;
+                    while !ctx.get_class_data(id).has_field(field) {
+                        id = ctx.get_class_data(id).get_super();
+                        new_struct_type = CGType::new(RawType::TObject(id));
+                    }
+                    if new_struct_type != struct_type {
+                        struct_addr = Val::Reg(ctx.cg
+                            .bitcast_object(struct_addr, struct_type, new_struct_type));
+                        struct_type = new_struct_type;
+                    }
                     let field_t = ctx.get_class_data(id).get_field_type(field);
                     let field_id = ctx.get_class_data(id).get_field_id(field);
                     (ctx.cg.get_field_addr(struct_addr, struct_type, field_id), field_t)

@@ -34,11 +34,14 @@ impl GenerateCode<()> for Stmt {
             }
             Stmt::SAssign(ref ident, ref e) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
-                let (val_reg, _) = e.generate_code(ctx);
+                let (mut val_reg, expr_t) = e.generate_code(ctx);
                 if t == CGType::new(RawType::TString) {
-                    let val = ctx.cg.add_load(addr_reg, t);
+                    let old_val_reg = Val::Reg(ctx.cg.add_load(addr_reg, t));
                     ctx.cg.retain_string(val_reg);
-                    ctx.cg.release_string(Val::Reg(val));
+                    ctx.cg.release_string(old_val_reg);
+                }
+                if t != expr_t {
+                    val_reg = Val::Reg(ctx.cg.bitcast_object(val_reg, expr_t, t));
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);
             }
@@ -55,13 +58,16 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_store(addr_reg, t, Val::Reg(val_reg));
             }
             Stmt::SReturnE(ref e) => {
-                let (val, _) = e.generate_code(ctx);
+                let (mut val_reg, expr_t) = e.generate_code(ctx);
                 let t = ctx.ret_type;
                 if t == CGType::new(RawType::TString) {
-                    ctx.cg.retain_string(val);
+                    ctx.cg.retain_string(val_reg);
+                }
+                if t != expr_t {
+                    val_reg = Val::Reg(ctx.cg.bitcast_object(val_reg, expr_t, t));
                 }
                 ctx.release_all_strings();
-                ctx.cg.add_ret(t, val);
+                ctx.cg.add_ret(t, val_reg);
             }
             Stmt::SReturn => {
                 ctx.release_all_strings();
@@ -208,9 +214,12 @@ impl GenerateCode<()> for VarDecl {
             VarDecl::Init(ref t, ref ident, ref e) => {
                 let t = ctx.to_cgtype(t);
                 let addr_reg = ctx.cg.add_alloca(t);
-                let (val_reg, _) = e.generate_code(ctx);
+                let (mut val_reg, expr_t) = e.generate_code(ctx);
                 if t == CGType::new(RawType::TString) {
                     ctx.cg.retain_string(val_reg);
+                }
+                if t != expr_t {
+                    val_reg = Val::Reg(ctx.cg.bitcast_object(val_reg, expr_t, t));
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);
                 ctx.set_var(ident.clone(), addr_reg, t);

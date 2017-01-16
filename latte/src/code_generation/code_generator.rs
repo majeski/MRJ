@@ -42,6 +42,8 @@ impl CodeGenerator {
                             &format!("malloc"),
                             &vec![CGType::new(RawType::TInt)]);
         cg.add_empty_line();
+        cg.add_line_no_indent(format!("%string_t = type {{ i32, i8*, i1 }}"));
+        cg.add_empty_line();
         cg
     }
 
@@ -116,6 +118,28 @@ impl CodeGenerator {
         self.add_line_no_indent(format!("%class_{} = type {{ {} }}",
                                         class_id,
                                         join(fields, ',', CGType::user_type)));
+    }
+
+    pub fn add_subclass_declare(&mut self,
+                                class_id: usize,
+                                super_id: usize,
+                                fields: &Vec<CGType>) {
+        let fields_str = if fields.is_empty() {
+            format!("")
+        } else {
+            format!(", {}", join(fields, ',', CGType::user_type))
+        };
+        self.add_line_no_indent(format!("%class_{} = type {{ %class_{}{} }}",
+                                        class_id,
+                                        super_id,
+                                        fields_str));
+    }
+
+    pub fn bitcast_object(&mut self, addr: Val, from: CGType, to: CGType) -> Register {
+        self.new_reg(format!("bitcast {} {} to {}",
+                             from.user_type(),
+                             addr,
+                             to.user_type()))
     }
 
     pub fn get_field_addr(&mut self, struct_ptr: Val, t: CGType, idx: usize) -> Register {
@@ -530,7 +554,7 @@ impl RawType {
         match self {
             RawType::TInt => format!("i32"),
             RawType::TBool => format!("i1"),
-            RawType::TString => format!("{{ i32, i8*, i1 }}"), // ref_count, char*, is_const
+            RawType::TString => format!("%string_t"), // ref_count, char*, is_const
             RawType::TVoid => format!("void"),
             RawType::TRawPtr => format!("i8*"),
             RawType::TObject(x) => format!("%class_{}", x),

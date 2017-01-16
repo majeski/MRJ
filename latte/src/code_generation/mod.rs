@@ -75,6 +75,10 @@ fn add_classes(p: &Program, ctx: &mut Context) {
     for class in &classes {
         let id = class_ids.get(&class.name).unwrap();
         let mut class_data = ClassData::new(*id, &class.name);
+        if let Some(ref super_name) = class.superclass {
+            class_data.set_super(*class_ids.get(super_name).unwrap());
+        }
+
         for v in &class.vars {
             let t = match v.t {
                 Type::TObject(ref cname) => {

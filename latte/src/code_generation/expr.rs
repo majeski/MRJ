@@ -69,7 +69,10 @@ fn generate_call(ident: &FieldGet, args: &Vec<Expr>, ctx: &mut Context) -> (Val,
 
     let mut arg_vals: Vec<(Val, CGType)> = Vec::new();
     for (arg_expr, arg_t) in args.iter().zip(arg_types) {
-        let (arg_val, _) = arg_expr.generate_code(ctx);
+        let (mut arg_val, expr_t) = arg_expr.generate_code(ctx);
+        if arg_t != expr_t {
+            arg_val = Val::Reg(ctx.cg.bitcast_object(arg_val, expr_t, arg_t));
+        }
         arg_vals.push((arg_val, arg_t));
     }
 
@@ -152,23 +155,32 @@ fn generate_eq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
 }
 
 fn init_object(t: CGType, obj: Register, ctx: &mut Context) {
-    if let RawType::TObject(id) = t.t {
-        let vars = ctx.get_class_data(id).fields.clone();
-        let str_t = CGType::new(RawType::TString);
-        if !vars.iter().any(|t| *t == str_t) {
-            return;
-        }
-
-        let empty_str = ctx.cg.alloc_string();
-        for (idx, var_t) in vars.iter().enumerate() {
-            if *var_t == str_t {
-                let dst_addr = ctx.cg.get_field_addr(Val::Reg(obj), t, idx);
-                ctx.cg.add_store(dst_addr, str_t, Val::Reg(empty_str));
-                ctx.cg.retain_string(Val::Reg(empty_str));
-            }
-        }
+    let id = if let RawType::TObject(id) = t.t {
+        id
     } else {
-        unreachable!();
+        unreachable!()
+    };
+
+    if let Some(super_id) = ctx.get_class_data(id).super_id {
+        let super_t = CGType::new(RawType::TObject(super_id));
+        let super_obj = ctx.cg.bitcast_object(Val::Reg(obj), t, super_t);
+        init_object(super_t, super_obj, ctx);
+    }
+
+    let fields = ctx.get_class_data(id).get_fields();
+    let str_t = CGType::new(RawType::TString);
+    if !fields.iter().any(|f| ctx.get_class_data(id).get_field_type(f) == str_t) {
+        return;
+    }
+
+    let empty_str = Val::Reg(ctx.cg.alloc_string());
+    for field in fields {
+        if ctx.get_class_data(id).get_field_type(&field) == str_t {
+            let field_id = ctx.get_class_data(id).get_field_id(&field);
+            let dst_addr = ctx.cg.get_field_addr(Val::Reg(obj), t, field_id);
+            ctx.cg.add_store(dst_addr, str_t, empty_str);
+            ctx.cg.retain_string(empty_str);
+        }
     }
 }
 

@@ -25,19 +25,37 @@ pub struct Context {
 #[derive(Debug, Clone)]
 pub struct ClassData {
     pub id: usize,
+    pub super_id: Option<usize>,
     pub ident: Ident,
-    pub fields: Vec<CGType>,
-    pub field_ids: HashMap<Ident, usize>,
+    fields: Vec<CGType>,
+    field_ids: HashMap<Ident, usize>,
 }
 
 impl ClassData {
     pub fn new(id: usize, ident: &Ident) -> ClassData {
         ClassData {
             id: id,
+            super_id: None,
             ident: ident.clone(),
             fields: Vec::new(),
             field_ids: HashMap::new(),
         }
+    }
+
+    pub fn set_super(&mut self, id: usize) {
+        self.super_id = Some(id);
+    }
+
+    pub fn get_super(&self) -> usize {
+        self.super_id.unwrap()
+    }
+
+    pub fn has_field(&self, ident: &Ident) -> bool {
+        self.field_ids.get(ident).is_some()
+    }
+
+    pub fn get_fields(&self) -> Vec<Ident> {
+        self.field_ids.keys().map(|k| k.clone()).collect()
     }
 
     pub fn add_field(&mut self, ident: &Ident, t: CGType) {
@@ -47,10 +65,18 @@ impl ClassData {
     }
 
     pub fn get_field_type(&self, ident: &Ident) -> CGType {
-        self.fields[self.get_field_id(ident)]
+        self.fields[self.get_field_idx(ident)]
     }
 
     pub fn get_field_id(&self, ident: &Ident) -> usize {
+        let mut res = self.get_field_idx(ident);
+        if self.super_id.is_some() {
+            res += 1;
+        }
+        res
+    }
+
+    fn get_field_idx(&self, ident: &Ident) -> usize {
         *self.field_ids.get(ident).unwrap()
     }
 }
@@ -166,7 +192,11 @@ impl Context {
     pub fn add_class(&mut self, id: usize, cdata: ClassData) {
         let cname = cdata.ident.clone();
         self.cg.add_comment(format!("class {}", cname));
-        self.cg.add_class_declare(id, &cdata.fields);
+        if let Some(super_id) = cdata.super_id {
+            self.cg.add_subclass_declare(id, super_id, &cdata.fields);
+        } else {
+            self.cg.add_class_declare(id, &cdata.fields);
+        }
         self.classes.insert(id, cdata);
         self.class_ids.insert(cname, id);
     }
