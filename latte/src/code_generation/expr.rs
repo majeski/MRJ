@@ -1,5 +1,6 @@
 use ast::*;
 
+use code_generation::cg_type::*;
 use code_generation::code_generator::*;
 use code_generation::context::*;
 use code_generation::generate::*;
@@ -9,21 +10,21 @@ impl GenerateCode<(Val, CGType)> for Expr {
         let (reg, t) = match *self {
             Expr::EVar(ref ident) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
-                let val = ctx.cg.add_load(addr_reg, t);
-                if t == CGType::new(RawType::TString) {
-                    ctx.cg.retain_string(Val::Reg(val));
+                let reg = ctx.cg.add_load(addr_reg, t);
+                if t == CGType::str_t() {
+                    ctx.cg.retain_string(reg);
                 }
-                (Val::Reg(val), t)
+                (reg, t)
             }
             Expr::ELit(ref lit) => lit.generate_code(ctx),
             Expr::ECall(ref ident, ref args) => generate_call(ident, args, ctx),
             Expr::ENeg(ref e) => {
                 let (val, t) = e.generate_code(ctx);
-                (Val::Reg(ctx.cg.add_neg(val)), t)
+                (ctx.cg.add_neg(val), t)
             }
             Expr::ENot(ref e) => {
                 let (val, t) = e.generate_code(ctx);
-                (Val::Reg(ctx.cg.add_not(val)), t)
+                (ctx.cg.add_not(val), t)
             }
             Expr::EBinOp(ref lhs, Operator::OpOr, ref rhs) => generate_or(lhs, rhs, ctx),
             Expr::EBinOp(ref lhs, Operator::OpAnd, ref rhs) => generate_and(lhs, rhs, ctx),
@@ -35,27 +36,27 @@ impl GenerateCode<(Val, CGType)> for Expr {
                 let (rhs_val, _) = rhs.generate_code(ctx);
                 let t = match *op {
                     Operator::OpLess | Operator::OpLessE | Operator::OpGreater |
-                    Operator::OpGreaterE => CGType::new(RawType::TBool),
+                    Operator::OpGreaterE => CGType::bool_t(),
                     Operator::OpAdd | Operator::OpSub | Operator::OpMul | Operator::OpDiv |
-                    Operator::OpMod => CGType::new(RawType::TInt),
+                    Operator::OpMod => CGType::int_t(),
                     _ => unreachable!(),
                 };
-                (Val::Reg(ctx.cg.add_int_op(lhs_val, *op, rhs_val)), t)
+                (ctx.cg.add_int_op(lhs_val, *op, rhs_val), t)
             }
             Expr::ENew(ref t) => {
                 let cgtype = ctx.to_cgtype(t);
                 let obj = ctx.cg.new_object(cgtype);
                 init_object(cgtype, obj, ctx);
-                (Val::Reg(obj), cgtype)
+                (obj, cgtype)
             }
             Expr::ENewArray(ref t, ref size) => {
                 let (size_val, _) = size.generate_code(ctx);
-                let arr_t = CGType::new_arr(ctx.to_cgtype(t).t);
+                let arr_t = CGType::arr_t(ctx.to_cgtype(t).as_raw());
                 let reg = ctx.cg.new_arr(arr_t, size_val);
-                (Val::Reg(reg), arr_t)
+                (reg, arr_t)
             }
         };
-        if t == CGType::new(RawType::TString) {
+        if t == CGType::str_t() {
             ctx.add_string_tmp(reg);
         }
         (reg, t)
@@ -63,20 +64,32 @@ impl GenerateCode<(Val, CGType)> for Expr {
 }
 
 fn generate_call(ident: &FieldGet, args: &Vec<Expr>, ctx: &mut Context) -> (Val, CGType) {
-    let func_name: Ident = ident.generate_code(ctx);
+    let (obj, mut func_name): (Option<(Val, ClassId)>, Ident) = ident.generate_code(ctx);
+    if obj.is_some() {
+        let mut id = obj.unwrap().1;
+        while !ctx.func_exists(&Ident(format!("class{}.{}", id, func_name))) {
+            id = ctx.get_class_data(id).get_super();
+        }
+        func_name = Ident(format!("class{}.{}", id, func_name));
+    }
+
     let ret_type = ctx.get_ret_type(&func_name);
     let arg_types = ctx.get_arg_types(&func_name);
 
-    let mut arg_vals: Vec<(Val, CGType)> = Vec::new();
-    for (arg_expr, arg_t) in args.iter().zip(arg_types) {
-        let (mut arg_val, expr_t) = arg_expr.generate_code(ctx);
-        if arg_t != expr_t {
-            arg_val = Val::Reg(ctx.cg.bitcast_object(arg_val, expr_t, arg_t));
-        }
-        arg_vals.push((arg_val, arg_t));
+    let mut arg_vals: Vec<(Val, CGType)> = args.iter().map(|a| a.generate_code(ctx)).collect();
+    if let Some((val, id)) = obj {
+        arg_vals.insert(0, (val, CGType::obj_t(id)));
     }
 
-    (Val::Reg(ctx.cg.add_call(ret_type, &func_name.0, &arg_vals)), ret_type)
+    let mut final_args: Vec<(Val, CGType)> = Vec::new();
+    for ((mut arg_val, arg_t), arg_dst_t) in arg_vals.into_iter().zip(arg_types) {
+        if arg_t != arg_dst_t {
+            arg_val = ctx.cg.bitcast_object(arg_val, arg_t, arg_dst_t);
+        }
+        final_args.push((arg_val, arg_dst_t));
+    }
+
+    (ctx.cg.add_call(ret_type, &func_name.0, &final_args), ret_type)
 }
 
 fn generate_or(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
@@ -96,10 +109,10 @@ fn generate_or(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
     ctx.cg.add_jump(end_label);
 
     ctx.cg.add_label(end_label);
-    let res_reg = ctx.cg.add_phi(CGType::new(RawType::TBool),
+    let res_reg = ctx.cg.add_phi(CGType::bool_t(),
                                  (Val::Int(1), lhs_block),
                                  (rhs_val, rhs_block));
-    (Val::Reg(res_reg), CGType::new(RawType::TBool))
+    (res_reg, CGType::bool_t())
 }
 
 fn generate_and(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
@@ -119,87 +132,107 @@ fn generate_and(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
     ctx.cg.add_jump(end_label);
 
     ctx.cg.add_label(end_label);
-    let res_reg = ctx.cg.add_phi(CGType::new(RawType::TBool),
+    let res_reg = ctx.cg.add_phi(CGType::bool_t(),
                                  (Val::Int(0), lhs_block),
                                  (rhs_val, rhs_block));
-    (Val::Reg(res_reg), CGType::new(RawType::TBool))
+    (res_reg, CGType::bool_t())
 }
 
 fn generate_add(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
     let (lhs_val, t) = lhs.generate_code(ctx);
     let (rhs_val, _) = rhs.generate_code(ctx);
-    let result = match t.t {
+    let val = match t.as_raw() {
         RawType::TInt => ctx.cg.add_int_op(lhs_val, Operator::OpAdd, rhs_val),
-        RawType::TString => ctx.cg.add_add_str(lhs_val, rhs_val),
+        RawType::TString => ctx.cg.concatenate_str(lhs_val, rhs_val),
         _ => unreachable!(),
     };
-    (Val::Reg(result), t)
+    (val, t)
 }
 
 fn generate_neq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
     let (val, t) = generate_eq(lhs, rhs, ctx);
-    (Val::Reg(ctx.cg.add_not(val)), t)
+    (ctx.cg.add_not(val), t)
 }
 
 fn generate_eq(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
     let (lhs_val, t1) = lhs.generate_code(ctx);
     let (rhs_val, t2) = rhs.generate_code(ctx);
-    let null_t = CGType::new(RawType::TNull);
+    let null_t = CGType::null_t();
     if t1 == null_t && t2 == null_t {
-        return (Val::Int(1), CGType::new(RawType::TBool));
+        return (Val::Int(1), CGType::bool_t());
     }
 
-    if let (RawType::TObject(lhs_id), RawType::TObject(rhs_id)) = (t1.t, t2.t) {
+    if let (RawType::TObject(lhs_id), RawType::TObject(rhs_id)) = (t1.as_raw(), t2.as_raw()) {
         return generate_objects_eq(lhs_val, lhs_id, rhs_val, rhs_id, ctx);
     }
 
     let t = if t1 != null_t { t1 } else { t2 };
     let result = ctx.cg.add_op(t, lhs_val, Operator::OpEq, rhs_val);
-    (Val::Reg(result), CGType::new(RawType::TBool))
+    (result, CGType::bool_t())
 }
 
-fn generate_objects_eq(mut lhs: Val, lhs_id: usize, mut rhs: Val, rhs_id: usize, ctx: &mut Context) -> (Val, CGType) {
-    let lhs_t = CGType::new(RawType::TObject(lhs_id));
-    let rhs_t = CGType::new(RawType::TObject(rhs_id));
+fn generate_objects_eq(mut lhs: Val,
+                       lhs_id: usize,
+                       mut rhs: Val,
+                       rhs_id: usize,
+                       ctx: &mut Context)
+                       -> (Val, CGType) {
+    let lhs_t = CGType::obj_t(lhs_id);
+    let rhs_t = CGType::obj_t(rhs_id);
     let mut t = lhs_t;
     if lhs_id != rhs_id {
         if ctx.is_subclass_of(lhs_id, rhs_id) {
-            lhs = Val::Reg(ctx.cg.bitcast_object(lhs, lhs_t, rhs_t));
+            lhs = ctx.cg.bitcast_object(lhs, lhs_t, rhs_t);
             t = rhs_t;
         } else if ctx.is_subclass_of(rhs_id, lhs_id) {
-            rhs = Val::Reg(ctx.cg.bitcast_object(rhs, rhs_t, lhs_t));
+            rhs = ctx.cg.bitcast_object(rhs, rhs_t, lhs_t);
             t = lhs_t;
         }
     }
 
     let result = ctx.cg.add_op(t, lhs, Operator::OpEq, rhs);
-    (Val::Reg(result), CGType::new(RawType::TBool))
+    (result, CGType::bool_t())
 }
 
-fn init_object(t: CGType, obj: Register, ctx: &mut Context) {
-    let id = if let RawType::TObject(id) = t.t {
-        id
-    } else {
-        unreachable!()
-    };
-
+fn init_object(t: CGType, obj: Val, ctx: &mut Context) {
+    let id = t.get_id();
     if let Some(super_id) = ctx.get_class_data(id).super_id {
-        let super_t = CGType::new(RawType::TObject(super_id));
-        let super_obj = ctx.cg.bitcast_object(Val::Reg(obj), t, super_t);
+        let super_t = CGType::obj_t(super_id);
+        let super_obj = ctx.cg.bitcast_object(obj, t, super_t);
         init_object(super_t, super_obj, ctx);
     }
 
     let fields = ctx.get_class_data(id).get_fields();
-    let str_t = CGType::new(RawType::TString);
+    for field in &fields {
+        let field_t = ctx.get_class_data(id).get_field_type(field);
+        let field_id = ctx.get_class_data(id).get_field_id(&field);
+        if field_t.is_arr() || field_t == CGType::str_t() {
+            continue;
+        }
+
+        let dst_addr = ctx.cg.get_field_addr(obj, t, field_id);
+        let val = if field_t.is_obj() {
+            Val::Null
+        } else if field_t == CGType::int_t() {
+            Val::Int(0)
+        } else if field_t == CGType::bool_t() {
+            Val::Int(0)
+        } else {
+            unreachable!()
+        };
+        ctx.cg.add_store(dst_addr, field_t, val);
+    }
+
+    let str_t = CGType::str_t();
     if !fields.iter().any(|f| ctx.get_class_data(id).get_field_type(f) == str_t) {
         return;
     }
 
-    let empty_str = Val::Reg(ctx.cg.alloc_string());
+    let empty_str = ctx.cg.alloc_string();
     for field in fields {
         if ctx.get_class_data(id).get_field_type(&field) == str_t {
             let field_id = ctx.get_class_data(id).get_field_id(&field);
-            let dst_addr = ctx.cg.get_field_addr(Val::Reg(obj), t, field_id);
+            let dst_addr = ctx.cg.get_field_addr(obj, t, field_id);
             ctx.cg.add_store(dst_addr, str_t, empty_str);
             ctx.cg.retain_string(empty_str);
         }
@@ -209,15 +242,15 @@ fn init_object(t: CGType, obj: Register, ctx: &mut Context) {
 impl GenerateCode<(Val, CGType)> for Lit {
     fn generate_code(&self, ctx: &mut Context) -> (Val, CGType) {
         match *self {
-            Lit::LInt(x) => (Val::Int(x), CGType::new(RawType::TInt)),
-            Lit::LTrue => (Val::Int(1), CGType::new(RawType::TBool)),
-            Lit::LFalse => (Val::Int(0), CGType::new(RawType::TBool)),
+            Lit::LInt(x) => (Val::Int(x), CGType::int_t()),
+            Lit::LTrue => (Val::Int(1), CGType::bool_t()),
+            Lit::LFalse => (Val::Int(0), CGType::bool_t()),
             Lit::LString(ref s) => {
                 let reg = ctx.get_str_const(s);
                 let val = ctx.cg.add_str_load(s.len(), reg);
-                (Val::Reg(val), CGType::new(RawType::TString))
+                (val, CGType::str_t())
             }
-            Lit::LNull(None) => (Val::Null, CGType::new(RawType::TNull)),
+            Lit::LNull(None) => (Val::Null, CGType::null_t()),
             Lit::LNull(Some(ref cname)) => {
                 (Val::Null, ctx.to_cgtype(&Type::TObject(cname.clone())))
             }

@@ -1,7 +1,8 @@
 use std::fmt;
 
-use ast::{Operator, Type};
+use ast::Operator;
 
+use code_generation::cg_type::*;
 use code_generation::utils::*;
 
 #[derive(Debug)]
@@ -10,7 +11,6 @@ pub struct CodeGenerator {
     last_reg: i32,
     last_label: i32,
     last_str_const: i32,
-    br_last_op: bool,
     current_label: Label,
 }
 
@@ -21,51 +21,49 @@ impl CodeGenerator {
             last_reg: 0,
             last_label: 0,
             last_str_const: 0,
-            br_last_op: false,
             current_label: Label(-1),
         };
 
-        cg.add_comment(format!("internal functions"));
-        cg.add_func_declare(CGType::new(RawType::TRawPtr),
-                            &format!(".concatenate"),
-                            &vec![CGType::new(RawType::TRawPtr), CGType::new(RawType::TRawPtr)]);
-        cg.add_func_declare(CGType::new(RawType::TVoid),
-                            &format!("._retain_str"),
-                            &vec![CGType::new(RawType::TString)]);
-        cg.add_func_declare(CGType::new(RawType::TVoid),
-                            &format!("._release_str"),
-                            &vec![CGType::new(RawType::TString)]);
-        cg.add_func_declare(CGType::new(RawType::TVoid),
-                            &format!("._init_str_arr"),
-                            &vec![CGType::new_arr(RawType::TString)]);
-        cg.add_func_declare(CGType::new(RawType::TRawPtr),
-                            &format!("malloc"),
-                            &vec![CGType::new(RawType::TInt)]);
-        cg.add_empty_line();
         cg.add_line_no_indent(format!("%string_t = type {{ i32, i8*, i1 }}"));
         cg.add_empty_line();
+
+        cg.add_comment(format!("internal functions"));
+        for (ret_type, name, args) in Self::internal_functions() {
+            cg.add_func_declare(ret_type, &name, &args);
+        }
+        cg.add_empty_line();
         cg
+    }
+
+    fn internal_functions() -> Vec<(CGType, String, Vec<CGType>)> {
+        vec![
+            (CGType::str_t(), format!("._concatenate"), vec![CGType::str_t(), CGType::str_t()]),
+            (CGType::str_t(), format!("._alloc_str"), vec![]),
+            (CGType::void_t(), format!("._retain_str"), vec![CGType::str_t()]),
+            (CGType::void_t(), format!("._release_str"), vec![CGType::str_t()]),
+            (CGType::void_t(), format!("._init_str_arr"), vec![CGType::arr_t(RawType::TString)]),
+            (CGType::ptr_t(), format!("malloc"), vec![CGType::int_t()]),
+        ]
     }
 
     pub fn reset(&mut self) {
         self.last_reg = 0;
         self.last_label = 0;
-        self.br_last_op = false;
     }
 
     pub fn get_out(&self) -> &Vec<String> {
         &self.out
     }
 
-    pub fn add_phi(&mut self, t: CGType, op1: (Val, Label), op2: (Val, Label)) -> Register {
+    pub fn add_phi(&mut self, t: CGType, op1: (Val, Label), op2: (Val, Label)) -> Val {
         self.new_reg(format!("phi {} [{}, %{}], [{}, %{}]", t, op1.0, op1.1, op2.0, op2.1))
     }
 
-    pub fn add_int_op(&mut self, lhs: Val, op: Operator, rhs: Val) -> Register {
-        self.add_op(CGType::new(RawType::TInt), lhs, op, rhs)
+    pub fn add_int_op(&mut self, lhs: Val, op: Operator, rhs: Val) -> Val {
+        self.add_op(CGType::int_t(), lhs, op, rhs)
     }
 
-    pub fn add_op(&mut self, t: CGType, lhs: Val, op: Operator, rhs: Val) -> Register {
+    pub fn add_op(&mut self, t: CGType, lhs: Val, op: Operator, rhs: Val) -> Val {
         let op_str = match op {
             Operator::OpAdd => "add",
             Operator::OpSub => "sub",
@@ -82,47 +80,33 @@ impl CodeGenerator {
         self.new_reg(format!("{} {} {}, {}", op_str, t, lhs, rhs))
     }
 
-    pub fn add_neg(&mut self, val: Val) -> Register {
+    pub fn add_neg(&mut self, val: Val) -> Val {
         self.new_reg(format!("sub i32 0, {}", val))
     }
 
-    pub fn add_not(&mut self, val: Val) -> Register {
+    pub fn add_not(&mut self, val: Val) -> Val {
         self.new_reg(format!("add i1 1, {}", val))
     }
 
-    pub fn add_add_str(&mut self, lhs: Val, rhs: Val) -> Register {
-        let str_t = CGType::new(RawType::TString);
-        self.add_comment(format!("Getting lhs string"));
-        let lhs_str_ptr = self.get_field_addr(lhs, str_t, 1);
-        let lhs_str = self.add_raw_load(lhs_str_ptr, format!("i8*"));
-        self.add_comment(format!("Getting rhs string"));
-        let rhs_str_ptr = self.get_field_addr(rhs, str_t, 1);
-        let rhs_str = self.add_raw_load(rhs_str_ptr, format!("i8*"));
-        self.add_comment(format!("Concatenate"));
-        let new_str =
-            self.new_reg(format!("call i8* @.concatenate(i8* %{}, i8* %{})", lhs_str, rhs_str));
-
-        let struct_ptr = self.alloc_string();
-        self.retain_string(Val::Reg(struct_ptr));
-        let str_ptr_addr = self.get_field_addr(Val::Reg(struct_ptr), str_t, 1);
-        self.add_raw_store(str_ptr_addr, format!("i8*"), Val::Reg(new_str));
-        struct_ptr
+    pub fn concatenate_str(&mut self, lhs: Val, rhs: Val) -> Val {
+        let str_t = CGType::str_t();
+        self.new_reg(format!("call {0} @._concatenate({0} {1}, {0} {2})", str_t, lhs, rhs))
     }
 
-    pub fn add_loop_step(&mut self, new_idx: Register, old_idx: Register) {
-        self.add_line(format!("%{} = add i32 1, %{}", new_idx, old_idx));
+    pub fn add_loop_step(&mut self, new_idx: Register, old_idx: Val) {
+        self.add_line(format!("%{} = add i32 1, {}", new_idx, old_idx));
     }
 
     // object
-    pub fn add_class_declare(&mut self, class_id: usize, fields: &Vec<CGType>) {
+    pub fn add_class_declare(&mut self, class_id: ClassId, fields: &Vec<CGType>) {
         self.add_line_no_indent(format!("%class_{} = type {{ {} }}",
                                         class_id,
                                         join(fields, ',', CGType::user_type)));
     }
 
     pub fn add_subclass_declare(&mut self,
-                                class_id: usize,
-                                super_id: usize,
+                                class_id: ClassId,
+                                super_id: ClassId,
                                 fields: &Vec<CGType>) {
         let fields_str = if fields.is_empty() {
             format!("")
@@ -135,14 +119,14 @@ impl CodeGenerator {
                                         fields_str));
     }
 
-    pub fn bitcast_object(&mut self, addr: Val, from: CGType, to: CGType) -> Register {
+    pub fn bitcast_object(&mut self, addr: Val, from: CGType, to: CGType) -> Val {
         self.new_reg(format!("bitcast {} {} to {}",
                              from.user_type(),
                              addr,
                              to.user_type()))
     }
 
-    pub fn get_field_addr(&mut self, struct_ptr: Val, t: CGType, idx: usize) -> Register {
+    pub fn get_field_addr(&mut self, struct_ptr: Val, t: CGType, idx: usize) -> Val {
         self.new_reg(format!("getelementptr {}, {}* {}, i32 0, i32 {}",
                              t.native_type(),
                              t.native_type(),
@@ -160,7 +144,7 @@ impl CodeGenerator {
                           ret_type: CGType,
                           func_name: &String,
                           args: &Vec<CGType>)
-                          -> Vec<(Register, CGType)> {
+                          -> Vec<(Val, CGType)> {
         let mut arg_regs: Vec<(Register, CGType)> = Vec::new();
         for arg_t in args {
             let reg = self.next_reg();
@@ -174,41 +158,36 @@ impl CodeGenerator {
                                         args_str,
                                         '{'));
 
-        let mut arg_addrs: Vec<(Register, CGType)> = Vec::new();
+        let mut arg_addrs: Vec<(Val, CGType)> = Vec::new();
         for arg in &arg_regs {
             let addr_reg = self.add_alloca(arg.1);
             self.add_store(addr_reg, arg.1, Val::Reg(arg.0));
+            if arg.1 == CGType::str_t() {
+                self.retain_string(Val::Reg(arg.0));
+            }
             arg_addrs.push((addr_reg, arg.1));
         }
         arg_addrs
     }
 
     pub fn add_func_end(&mut self, ret_type: CGType) {
-        if ret_type == CGType::new(RawType::TVoid) {
+        if ret_type == CGType::void_t() {
             self.add_line(format!("ret void"));
         }
         self.add_line_no_indent(format!("{}", '}'));
         self.add_line_no_indent(format!(""));
     }
 
-    pub fn add_ret_void(&mut self) {
-        self.add_line(format!("ret void"));
-    }
-
-    pub fn add_ret(&mut self, t: CGType, val: Val) {
-        self.add_line(format!("ret {} {}", t, val));
-    }
-
     pub fn add_call(&mut self,
                     ret_type: CGType,
                     func_name: &String,
                     args: &Vec<(Val, CGType)>)
-                    -> Register {
+                    -> Val {
         let args_str = join(args, ',', |(val, val_t)| format!("{} {}", val_t, val));
         let call_str = format!("call {} @{}({})", ret_type, func_name, args_str);
-        if ret_type == CGType::new(RawType::TVoid) {
+        if ret_type == CGType::void_t() {
             self.add_line(call_str);
-            self.dummy_reg()
+            Val::Reg(self.dummy_reg())
         } else {
             self.new_reg(call_str)
         }
@@ -226,132 +205,121 @@ impl CodeGenerator {
         reg
     }
 
-    pub fn add_str_load(&mut self, str_size: usize, str_const: StrConstant) -> Register {
+    pub fn add_str_load(&mut self, str_size: usize, str_const: StrConstant) -> Val {
         let str_ptr = self.new_reg(format!("getelementptr [{} x i8], [{} x i8]* @{}, i64 0, i64 \
                                             0",
                                            str_size + 1,
                                            str_size + 1,
                                            str_const));
-        let str_t = CGType::new(RawType::TString);
+        let str_t = CGType::str_t();
         let struct_ptr = self.alloc_string();
-        self.retain_string(Val::Reg(struct_ptr));
-        let addr = self.get_field_addr(Val::Reg(struct_ptr), str_t, 1);
-        self.add_raw_store(addr, format!("i8*"), Val::Reg(str_ptr));
-        let addr = self.get_field_addr(Val::Reg(struct_ptr), str_t, 2);
-        self.add_raw_store(addr, format!("i1"), Val::Int(1));
+        self.retain_string(struct_ptr);
+        let addr = self.get_field_addr(struct_ptr, str_t, 2);
+        self.add_store(addr, CGType::bool_t(), Val::Int(1)); // is_const = 1
+        let addr = self.get_field_addr(struct_ptr, str_t, 1);
+        self.add_store(addr, CGType::ptr_t(), str_ptr);
         struct_ptr
     }
 
-    pub fn alloc_string(&mut self) -> Register {
-        self.add_comment(format!("Allocating empty string"));
-        let str_t = CGType::new(RawType::TString);
-        let struct_ptr = self.add_malloc1(str_t.native_type());
-        let reg = self.new_reg(format!("insertvalue {} undef, i32 0, 0", str_t.native_type()));
-        let reg =
-            self.new_reg(format!("insertvalue {} %{}, i8* null, 1", str_t.native_type(), reg));
-        let reg =
-            self.new_reg(format!("insertvalue {} %{}, i1 false, 2", str_t.native_type(), reg));
-        self.add_raw_store(struct_ptr, str_t.native_type(), Val::Reg(reg));
-        struct_ptr
+    pub fn alloc_string(&mut self) -> Val {
+        self.add_call(CGType::str_t(), &format!("._alloc_str"), &vec![])
     }
 
     pub fn retain_string(&mut self, struct_ptr: Val) {
-        self.add_call(CGType::new(RawType::TVoid),
+        self.add_call(CGType::void_t(),
                       &format!("._retain_str"),
-                      &vec![(struct_ptr, CGType::new(RawType::TString))]);
+                      &vec![(struct_ptr, CGType::str_t())]);
     }
 
     pub fn release_string(&mut self, struct_ptr: Val) {
-        self.add_call(CGType::new(RawType::TVoid),
+        self.add_call(CGType::void_t(),
                       &format!("._release_str"),
-                      &vec![(struct_ptr, CGType::new(RawType::TString))]);
+                      &vec![(struct_ptr, CGType::str_t())]);
     }
 
-    pub fn new_arr(&mut self, arr_t: CGType, size: Val) -> Register {
+    pub fn new_arr(&mut self, arr_t: CGType, size: Val) -> Val {
         let struct_ptr = self.add_malloc1(arr_t.native_type());
-        let arr_ptr = self.add_malloc(arr_t.t.user_type(), size);
+        let arr_ptr = self.add_malloc(arr_t.arr_elem_t().user_type(), size);
 
-        self.add_comment(format!("Constructing array"));
         let reg =
             self.new_reg(format!("insertvalue {} undef, i32 {}, 0", arr_t.native_type(), size));
-        let reg = self.new_reg(format!("insertvalue {} %{}, {}* %{}, 1",
+        let reg = self.new_reg(format!("insertvalue {} {}, {}* {}, 1",
                                        arr_t.native_type(),
                                        reg,
-                                       arr_t.t.user_type(),
+                                       arr_t.arr_elem_t().user_type(),
                                        arr_ptr));
-        self.add_comment(format!("Storing array"));
-        self.add_raw_store(struct_ptr, arr_t.native_type(), Val::Reg(reg));
+        self.add_raw_store(struct_ptr, arr_t.native_type(), reg);
 
-        if arr_t.t == RawType::TString {
-            self.add_call(CGType::new(RawType::TVoid),
+        if arr_t.arr_elem_t() == CGType::str_t() {
+            self.add_call(CGType::void_t(),
                           &format!("._init_str_arr"),
-                          &vec![(Val::Reg(struct_ptr), arr_t)]);
+                          &vec![(struct_ptr, arr_t)]);
         }
 
         struct_ptr
     }
 
-    pub fn new_object(&mut self, t: CGType) -> Register {
+    pub fn new_object(&mut self, t: CGType) -> Val {
         self.add_malloc1(t.native_type())
     }
 
-    fn add_malloc1(&mut self, t: String) -> Register {
+    fn add_malloc1(&mut self, t: String) -> Val {
         self.add_malloc(t, Val::Int(1))
     }
 
-    fn add_malloc(&mut self, t: String, size: Val) -> Register {
-        self.add_comment(format!("Allocating {}", t));
+    fn add_malloc(&mut self, t: String, size: Val) -> Val {
+        self.add_comment(format!("Allocating {} begin", t));
         let size_of = self.get_sizeof(t.clone(), size);
-        let void_addr = self.new_reg(format!("call i8* @malloc(i32 %{})", size_of));
-        let cast_addr = self.new_reg(format!("bitcast i8* %{} to {}*", void_addr, t));
+        let void_addr = self.new_reg(format!("call i8* @malloc(i32 {})", size_of));
+        let cast_addr = self.new_reg(format!("bitcast i8* {} to {}*", void_addr, t));
+        self.add_comment(format!("Allocating {} end", t));
         cast_addr
     }
 
-    fn get_sizeof(&mut self, t: String, size: Val) -> Register {
-        self.add_comment(format!("Calculating sizeof({})", t));
+    fn get_sizeof(&mut self, t: String, size: Val) -> Val {
+        self.add_comment(format!("Calculating sizeof({}) begin", t));
         let size_of = self.new_reg(format!("getelementptr {}, {}* null, i32 {}", t, t, size));
-        self.new_reg(format!("ptrtoint {}* %{} to i32", t, size_of))
+        let res = self.new_reg(format!("ptrtoint {}* {} to i32", t, size_of));
+        self.add_comment(format!("Calculating sizeof({}) end", t));
+        res
     }
 
-    pub fn get_nth_arr_elem(&mut self, struct_ptr: Val, t: CGType, idx: Val) -> (Register, CGType) {
-        self.add_comment(format!("Loading array struct"));
-        let struct_val = self.add_raw_load(struct_ptr.to_reg(), t.native_type());
-        self.add_comment(format!("Getting array pointer"));
-        let elem0_ptr =
-            self.new_reg(format!("extractvalue {} %{}, 1", t.native_type(), struct_val));
-        let elem_ptr = self.new_reg(format!("getelementptr {}, {} %{}, i32 {}",
-                                            t.t.user_type(),
-                                            t.t.in_arr_type(),
+    pub fn get_nth_arr_elem(&mut self, struct_ptr: Val, t: CGType, idx: Val) -> (Val, CGType) {
+        let struct_val = self.add_raw_load(struct_ptr, t.native_type());
+        let elem0_ptr = self.new_reg(format!("extractvalue {} {}, 1", t.native_type(), struct_val));
+        let elem_ptr = self.new_reg(format!("getelementptr {}, {} {}, i32 {}",
+                                            t.arr_elem_t().user_type(),
+                                            t.as_raw().in_arr_type(),
                                             elem0_ptr,
                                             idx));
-        (elem_ptr, CGType::new(t.t))
+        (elem_ptr, t.arr_elem_t())
     }
 
-    pub fn add_alloca(&mut self, t: CGType) -> Register {
+    pub fn add_alloca(&mut self, t: CGType) -> Val {
         self.new_reg(format!("alloca {}", t))
     }
 
-    pub fn add_load(&mut self, addr_reg: Register, t: CGType) -> Register {
-        self.new_reg(format!("load {}, {}* %{}", t, t, addr_reg))
+    pub fn add_load(&mut self, addr_reg: Val, t: CGType) -> Val {
+        self.add_raw_load(addr_reg, format!("{}", t))
     }
 
-    fn add_raw_load(&mut self, addr_reg: Register, t: String) -> Register {
-        self.new_reg(format!("load {}, {}* %{}", t, t, addr_reg))
+    fn add_raw_load(&mut self, addr_reg: Val, t: String) -> Val {
+        self.new_reg(format!("load {}, {}* {}", t, t, addr_reg))
     }
 
-    pub fn add_store(&mut self, addr_reg: Register, t: CGType, val: Val) {
-        self.add_line(format!("store {} {}, {}* %{}", t, val, t, addr_reg));
+    pub fn add_store(&mut self, addr_reg: Val, t: CGType, val: Val) {
+        self.add_raw_store(addr_reg, format!("{}", t), val);
     }
 
-    fn add_raw_store(&mut self, addr_reg: Register, t: String, val: Val) {
-        self.add_line(format!("store {} {}, {}* %{}", t, val, t, addr_reg));
+    fn add_raw_store(&mut self, addr_reg: Val, t: String, val: Val) {
+        self.add_line(format!("store {} {}, {}* {}", t, val, t, addr_reg));
     }
 
     // generating registers
-    fn new_reg(&mut self, rhs: String) -> Register {
+    fn new_reg(&mut self, rhs: String) -> Val {
         let reg = self.next_reg();
         self.add_line(format!("%{} = {}", reg, rhs));
-        reg
+        Val::Reg(reg)
     }
 
     pub fn next_reg(&mut self) -> Register {
@@ -364,6 +332,14 @@ impl CodeGenerator {
     }
 
     // labels & brs
+    pub fn add_ret_void(&mut self) {
+        self.add_line(format!("ret void"));
+    }
+
+    pub fn add_ret(&mut self, t: CGType, val: Val) {
+        self.add_line(format!("ret {} {}", t, val));
+    }
+
     pub fn get_current_label(&self) -> Label {
         self.current_label
     }
@@ -379,17 +355,11 @@ impl CodeGenerator {
     }
 
     pub fn add_cond_jump(&mut self, cond: Val, if_true: Label, if_false: Label) {
-        if !self.br_last_op {
-            self.add_line(format!("br i1 {}, label %{}, label %{}", cond, if_true, if_false));
-        }
-        self.br_last_op = true;
+        self.add_line(format!("br i1 {}, label %{}, label %{}", cond, if_true, if_false));
     }
 
     pub fn add_jump(&mut self, l: Label) {
-        if !self.br_last_op {
-            self.add_line(format!("br label %{}", l));
-        }
-        self.br_last_op = true;
+        self.add_line(format!("br label %{}", l));
     }
 
     // core functions
@@ -398,12 +368,10 @@ impl CodeGenerator {
     }
 
     fn add_line(&mut self, s: String) {
-        self.br_last_op = false;
         self.out.push(format!("\t{}", s));
     }
 
     fn add_line_no_indent(&mut self, s: String) {
-        self.br_last_op = false;
         self.out.push(s);
     }
 
@@ -419,14 +387,14 @@ pub enum Val {
     Null,
 }
 
-impl Val {
-    fn to_reg(&self) -> Register {
-        match *self {
-            Val::Reg(r) => r,
-            _ => panic!(),
-        }
-    }
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Register(i32);
+
+#[derive(Debug, Clone, Copy)]
+pub struct StrConstant(i32);
+
+#[derive(Debug, Clone, Copy)]
+pub struct Label(i32);
 
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -438,17 +406,11 @@ impl fmt::Display for Val {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Register(i32);
-
 impl fmt::Display for Register {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "r_{}", self.0)
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-pub struct StrConstant(i32);
 
 impl fmt::Display for StrConstant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -456,109 +418,8 @@ impl fmt::Display for StrConstant {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Label(i32);
-
 impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "label_{}", self.0)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CGType {
-    pub is_arr: bool,
-    pub t: RawType,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RawType {
-    TInt,
-    TBool,
-    TVoid,
-    TString,
-    TRawPtr,
-    TObject(usize),
-    TNull,
-}
-
-impl fmt::Display for CGType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.user_type())
-    }
-}
-
-impl CGType {
-    pub fn new(t: RawType) -> CGType {
-        CGType {
-            is_arr: false,
-            t: t,
-        }
-    }
-
-    pub fn new_arr(t: RawType) -> CGType {
-        CGType {
-            is_arr: true,
-            t: t,
-        }
-    }
-
-    pub fn from(t: &Type) -> CGType {
-        match *t {
-            Type::TArray(ref t) => Self::new_arr(RawType::from(t)),
-            _ => Self::new(RawType::from(t)),
-        }
-    }
-
-    fn user_type(self) -> String {
-        if self.is_arr {
-            format!("{{ i32, {} }}*", self.t.in_arr_type())
-        } else {
-            format!("{}", self.t.user_type())
-        }
-    }
-
-    fn native_type(self) -> String {
-        if self.is_arr {
-            format!("{{ i32, {} }}", self.t.in_arr_type())
-        } else {
-            format!("{}", self.t.native_type())
-        }
-    }
-}
-
-impl RawType {
-    fn from(t: &Type) -> RawType {
-        match *t {
-            Type::TInt => RawType::TInt,
-            Type::TBool => RawType::TBool,
-            Type::TString => RawType::TString,
-            Type::TVoid => RawType::TVoid,
-            _ => unreachable!(),
-        }
-    }
-
-    fn in_arr_type(self) -> String {
-        format!("{}*", self.user_type())
-    }
-
-    fn user_type(self) -> String {
-        match self {
-            RawType::TString |
-            RawType::TObject(_) => format!("{}*", self.native_type()),
-            _ => format!("{}", self.native_type()),
-        }
-    }
-
-    fn native_type(self) -> String {
-        match self {
-            RawType::TInt => format!("i32"),
-            RawType::TBool => format!("i1"),
-            RawType::TString => format!("%string_t"), // ref_count, char*, is_const
-            RawType::TVoid => format!("void"),
-            RawType::TRawPtr => format!("i8*"),
-            RawType::TObject(x) => format!("%class_{}", x),
-            RawType::TNull => panic!("null is not a valid type"),
-        }
     }
 }

@@ -129,7 +129,7 @@ declare i8* @malloc(i64) #1
 declare void @free(i8*)
 
 ; Function Attrs: nounwind ssp uwtable
-define i8* @.concatenate(i8*, i8*) #0 {
+define i8* @._raw_concatenate(i8*, i8*) #0 {
   %3 = alloca i8*, align 8
   %4 = alloca i8*, align 8
   %5 = alloca i8*, align 8
@@ -200,33 +200,49 @@ define { i32, i8* }* @readString() {
   ret { i32, i8* }* %struct_ptr
 }
 
-%string = type { i32, i8*, i1 }
+%string_t = type { i32, i8*, i1 }
 
-define void @._init_str_arr({ i32, %string**}* %arr_ptr) {
-  %arr_val = load { i32, %string** }, { i32, %string** }* %arr_ptr
-  %size = extractvalue { i32, %string** } %arr_val, 0
+define %string_t* @._concatenate(%string_t* %r_1, %string_t* %r_2) {
+; Getting lhs string
+	%lhs_str_ptr = getelementptr %string_t, %string_t* %r_1, i32 0, i32 1
+	%lhs_str = load i8*, i8** %lhs_str_ptr
+; Getting rhs string
+	%rhs_str_ptr = getelementptr %string_t, %string_t* %r_2, i32 0, i32 1
+	%rhs_str = load i8*, i8** %rhs_str_ptr
+; Concatenate
+	%res_str = call i8* @._raw_concatenate(i8* %lhs_str, i8* %rhs_str)
+	%res_struct = call %string_t* @._alloc_str()
+  call void @._retain_str(%string_t* %res_struct)
+	%res_str_ptr = getelementptr %string_t, %string_t* %res_struct, i32 0, i32 1
+	store i8* %res_str, i8** %res_str_ptr
+	ret %string_t* %res_struct
+}
+
+define void @._init_str_arr({ i32, %string_t**}* %arr_ptr) {
+  %arr_val = load { i32, %string_t** }, { i32, %string_t** }* %arr_ptr
+  %size = extractvalue { i32, %string_t** } %arr_val, 0
   %is_empty = icmp sle i32 %size, 0
   br i1 %is_empty, label %end, label %start
 
 start:
-  %str_arr = extractvalue { i32, %string** } %arr_val, 1
+  %str_arr = extractvalue { i32, %string_t** } %arr_val, 1
 
   ; create empty string
-  %sizeof_tmp = getelementptr %string, %string* null, i32 1
-  %sizeof = ptrtoint %string* %sizeof_tmp to i64
+  %sizeof_tmp = getelementptr %string_t, %string_t* null, i32 1
+  %sizeof = ptrtoint %string_t* %sizeof_tmp to i64
   %struct_ptr_tmp = call i8* @malloc(i64 %sizeof)
-  %struct_ptr = bitcast i8* %struct_ptr_tmp to %string*
+  %struct_ptr = bitcast i8* %struct_ptr_tmp to %string_t*
 
-  %struct_tmp = insertvalue %string undef, i32 %size, 0
-  %struct_tmp2 = insertvalue %string %struct_tmp, i8* null, 1
-  %struct = insertvalue %string %struct_tmp2, i1 false, 2
-  store %string %struct, %string* %struct_ptr
+  %struct_tmp = insertvalue %string_t undef, i32 %size, 0
+  %struct_tmp2 = insertvalue %string_t %struct_tmp, i8* null, 1
+  %struct = insertvalue %string_t %struct_tmp2, i1 false, 2
+  store %string_t %struct, %string_t* %struct_ptr
   br label %loop_body
 
 loop_body:
   %idx = phi i32 [0, %start], [%next_idx, %loop_body]
-  %elem_ptr = getelementptr %string*, %string** %str_arr, i32 %idx
-  store %string* %struct_ptr, %string** %elem_ptr
+  %elem_ptr = getelementptr %string_t*, %string_t** %str_arr, i32 %idx
+  store %string_t* %struct_ptr, %string_t** %elem_ptr
 
   %next_idx = add i32 %idx, 1
   %is_last = icmp eq i32 %next_idx, %size
@@ -236,38 +252,50 @@ end:
   ret void
 }
 
-define void @._retain_str(%string* %s) {
-  %s_val = load %string, %string* %s
-  %refs = extractvalue %string %s_val, 0
+define %string_t* @._alloc_str() {
+	%r_1 = getelementptr %string_t, %string_t* null, i32 1
+	%r_2 = ptrtoint %string_t* %r_1 to i64
+	%r_3 = call i8* @malloc(i64 %r_2)
+	%r_4 = bitcast i8* %r_3 to %string_t*
+	%r_5 = insertvalue %string_t undef, i32 0, 0
+	%r_6 = insertvalue %string_t %r_5, i8* null, 1
+	%r_7 = insertvalue %string_t %r_6, i1 false, 2
+	store %string_t %r_7, %string_t* %r_4
+  ret %string_t* %r_4
+}
+
+define void @._retain_str(%string_t* %s) {
+  %s_val = load %string_t, %string_t* %s
+  %refs = extractvalue %string_t %s_val, 0
   %new_refs = add i32 %refs, 1
-  %s_new_val = insertvalue %string %s_val, i32 %new_refs, 0
-  store %string %s_new_val, %string* %s
+  %s_new_val = insertvalue %string_t %s_val, i32 %new_refs, 0
+  store %string_t %s_new_val, %string_t* %s
   ret void
 }
 
-define void @._release_str(%string* %s) {
-  %s_val = load %string, %string* %s
-  %refs = extractvalue %string %s_val, 0
+define void @._release_str(%string_t* %s) {
+  %s_val = load %string_t, %string_t* %s
+  %refs = extractvalue %string_t %s_val, 0
   %new_refs = sub i32 %refs, 1
   %to_free = icmp eq i32 %new_refs, 0
   br i1 %to_free, label %del_struct, label %update
 
 del_struct:
-  %struct_ptr = bitcast %string* %s to i8*
+  %struct_ptr = bitcast %string_t* %s to i8*
   ; call void @printInt(i32 55)
   call void @free(i8* %struct_ptr)
-  %is_const = extractvalue %string %s_val, 2
+  %is_const = extractvalue %string_t %s_val, 2
   br i1 %is_const, label %end, label %del_ptr
 
 del_ptr:
   ; call void @printInt(i32 77)
-  %s_ptr = extractvalue %string %s_val, 1
+  %s_ptr = extractvalue %string_t %s_val, 1
   call void @free(i8* %s_ptr)
   br label %end
 
 update:
-  %s_new_val = insertvalue %string %s_val, i32 %new_refs, 0
-  store %string %s_new_val, %string* %s
+  %s_new_val = insertvalue %string_t %s_val, i32 %new_refs, 0
+  store %string_t %s_new_val, %string_t* %s
   br label %end
 
 end:

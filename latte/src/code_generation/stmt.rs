@@ -2,6 +2,7 @@ use ast::*;
 
 use static_analysis::has_return::*;
 
+use code_generation::cg_type::*;
 use code_generation::code_generator::*;
 use code_generation::context::*;
 use code_generation::generate::*;
@@ -35,36 +36,36 @@ impl GenerateCode<()> for Stmt {
             Stmt::SAssign(ref ident, ref e) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
                 let (mut val_reg, expr_t) = e.generate_code(ctx);
-                if t == CGType::new(RawType::TString) {
-                    let old_val_reg = Val::Reg(ctx.cg.add_load(addr_reg, t));
+                if t == CGType::str_t() {
+                    let old_val_reg = ctx.cg.add_load(addr_reg, t);
                     ctx.cg.retain_string(val_reg);
                     ctx.cg.release_string(old_val_reg);
                 }
                 if t != expr_t {
-                    val_reg = Val::Reg(ctx.cg.bitcast_object(val_reg, expr_t, t));
+                    val_reg = ctx.cg.bitcast_object(val_reg, expr_t, t);
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);
             }
             Stmt::SInc(ref ident) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
                 let mut val_reg = ctx.cg.add_load(addr_reg, t);
-                val_reg = ctx.cg.add_int_op(Val::Reg(val_reg), Operator::OpAdd, Val::Int(1));
-                ctx.cg.add_store(addr_reg, t, Val::Reg(val_reg));
+                val_reg = ctx.cg.add_int_op(val_reg, Operator::OpAdd, Val::Int(1));
+                ctx.cg.add_store(addr_reg, t, val_reg);
             }
             Stmt::SDec(ref ident) => {
                 let (addr_reg, t) = ident.generate_code(ctx);
                 let mut val_reg = ctx.cg.add_load(addr_reg, t);
-                val_reg = ctx.cg.add_int_op(Val::Reg(val_reg), Operator::OpSub, Val::Int(1));
-                ctx.cg.add_store(addr_reg, t, Val::Reg(val_reg));
+                val_reg = ctx.cg.add_int_op(val_reg, Operator::OpSub, Val::Int(1));
+                ctx.cg.add_store(addr_reg, t, val_reg);
             }
             Stmt::SReturnE(ref e) => {
                 let (mut val_reg, expr_t) = e.generate_code(ctx);
                 let t = ctx.ret_type;
-                if t == CGType::new(RawType::TString) {
+                if t == CGType::str_t() {
                     ctx.cg.retain_string(val_reg);
                 }
                 if t != expr_t {
-                    val_reg = Val::Reg(ctx.cg.bitcast_object(val_reg, expr_t, t));
+                    val_reg = ctx.cg.bitcast_object(val_reg, expr_t, t);
                 }
                 ctx.release_all_strings();
                 ctx.cg.add_ret(t, val_reg);
@@ -158,28 +159,28 @@ impl GenerateCode<()> for Stmt {
                 ctx.cg.add_jump(before_loop);
                 ctx.cg.add_label(before_loop);
                 let arr_size_ptr = ctx.cg.get_field_addr(arr, arr_t, 0);
-                let arr_size = ctx.cg.add_load(arr_size_ptr, CGType::new(RawType::TInt));
+                let arr_size = ctx.cg.add_load(arr_size_ptr, CGType::int_t());
 
                 ctx.cg.add_jump(loop_begin);
                 ctx.cg.add_label(loop_begin);
                 let new_idx_reg = ctx.cg.next_reg();
-                let idx_reg = ctx.cg.add_phi(CGType::new(RawType::TInt),
+                let idx_reg = ctx.cg.add_phi(CGType::int_t(),
                                              (Val::Int(0), before_loop),
                                              (Val::Reg(new_idx_reg), loop_end));
                 let valid_idx = ctx.cg
-                    .add_int_op(Val::Reg(idx_reg), Operator::OpLess, Val::Reg(arr_size));
-                ctx.cg.add_cond_jump(Val::Reg(valid_idx), loop_body, after_loop);
+                    .add_int_op(idx_reg, Operator::OpLess, arr_size);
+                ctx.cg.add_cond_jump(valid_idx, loop_body, after_loop);
 
                 ctx.cg.add_label(loop_body);
                 ctx.in_new_scope(|mut ctx| {
                     let (elem_addr, elem_t) = ctx.cg
-                        .get_nth_arr_elem(arr, arr_t, Val::Reg(idx_reg));
+                        .get_nth_arr_elem(arr, arr_t, idx_reg);
                     let loop_var_addr = ctx.cg.add_alloca(elem_t);
-                    let val = Val::Reg(ctx.cg.add_load(elem_addr, elem_t));
+                    let val = ctx.cg.add_load(elem_addr, elem_t);
                     ctx.cg.add_store(loop_var_addr, elem_t, val);
                     ctx.set_var(ident.clone(), loop_var_addr, elem_t);
 
-                    if elem_t == CGType::new(RawType::TString) {
+                    if elem_t == CGType::str_t() {
                         ctx.cg.retain_string(val);
                     }
 
@@ -215,11 +216,11 @@ impl GenerateCode<()> for VarDecl {
                 let t = ctx.to_cgtype(t);
                 let addr_reg = ctx.cg.add_alloca(t);
                 let (mut val_reg, expr_t) = e.generate_code(ctx);
-                if t == CGType::new(RawType::TString) {
+                if t == CGType::str_t() {
                     ctx.cg.retain_string(val_reg);
                 }
                 if t != expr_t {
-                    val_reg = Val::Reg(ctx.cg.bitcast_object(val_reg, expr_t, t));
+                    val_reg = ctx.cg.bitcast_object(val_reg, expr_t, t);
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);
                 ctx.set_var(ident.clone(), addr_reg, t);
@@ -235,7 +236,7 @@ impl GenerateCode<()> for VarDecl {
                 let t = ctx.to_cgtype(t);
                 let addr_reg = ctx.cg.add_alloca(t);
                 let (val_reg, _) = Expr::ELit(default_lit).generate_code(ctx);
-                if t == CGType::new(RawType::TString) {
+                if t == CGType::str_t() {
                     ctx.cg.retain_string(val_reg);
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);

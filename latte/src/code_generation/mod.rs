@@ -6,6 +6,8 @@ use ast::*;
 use builtins::*;
 use static_analysis::collect_string_lit::*;
 
+mod cg_type;
+mod class_data;
 mod code_generator;
 mod context;
 mod expr;
@@ -15,7 +17,8 @@ mod generate;
 mod stmt;
 mod utils;
 
-use self::code_generator::*;
+use self::cg_type::*;
+use self::class_data::*;
 use self::context::*;
 use self::generate::*;
 
@@ -30,8 +33,15 @@ pub fn gen_llvm(p: &Program, out_file: &mut File) -> Result<(), io::Error> {
 
     for def in &p.0 {
         match *def {
-            Def::DClass(..) => {
-                // unimplemented!() // TODO
+            Def::DClass(ref c) => {
+                ctx.in_new_scope(|ctx| {
+                    let id = ctx.get_class_id(&c.name);
+                    ctx.class = Some(id);
+                    for m in &c.methods {
+                        m.generate_code(ctx);
+                    }
+                    ctx.class = None;
+                });
             }
             Def::DFunc(ref f) => f.generate_code(&mut ctx),
         }
@@ -83,7 +93,7 @@ fn add_classes(p: &Program, ctx: &mut Context) {
             let t = match v.t {
                 Type::TObject(ref cname) => {
                     let id = class_ids.get(cname).unwrap();
-                    CGType::new(RawType::TObject(*id))
+                    CGType::obj_t(*id)
                 }
                 _ => CGType::from(&v.t),
             };
@@ -95,10 +105,25 @@ fn add_classes(p: &Program, ctx: &mut Context) {
 
 fn add_funcs(p: &Program, ctx: &mut Context) {
     for def in &p.0 {
-        if let Def::DFunc(ref f) = *def {
-            let ret_type = ctx.to_cgtype(&f.ret_type);
-            let arg_types = f.args.iter().map(|arg| ctx.to_cgtype(&arg.t)).collect();
-            ctx.add_func(&f.ident, arg_types, ret_type);
+        match *def {
+            Def::DFunc(ref f) => {
+                let ret_type = ctx.to_cgtype(&f.ret_type);
+                let arg_types = f.args.iter().map(|arg| ctx.to_cgtype(&arg.t)).collect();
+                ctx.add_func(&f.ident, arg_types, ret_type);
+            }
+            Def::DClass(ref c) => {
+                let obj_t = ctx.to_cgtype(&Type::TObject(c.name.clone()));
+                for f in &c.methods {
+                    let ret_type = ctx.to_cgtype(&f.ret_type);
+                    let mut arg_types: Vec<CGType> =
+                        f.args.iter().map(|arg| ctx.to_cgtype(&arg.t)).collect();
+                    arg_types.insert(0, obj_t);
+                    let arg_types = arg_types;
+                    ctx.add_func(&Ident(format!("class{}.{}", obj_t.get_id(), f.ident)),
+                                 arg_types,
+                                 ret_type);
+                }
+            }
         }
     }
 }
