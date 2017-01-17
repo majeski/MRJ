@@ -5,6 +5,7 @@ use ast::{Type, Ident};
 use code_generation::cg_type::*;
 use code_generation::class_data::*;
 use code_generation::code_generator::*;
+use code_generation::vtable::*;
 
 #[derive(Debug)]
 pub struct Context {
@@ -153,6 +154,13 @@ impl Context {
         }
         self.classes.insert(id, cdata);
         self.class_ids.insert(cname, id);
+    }
+
+    pub fn set_vtable(&mut self, cname: &Ident, vtable: VTable) {
+        let id = self.get_class_id(cname);
+        let vtable_addr = self.cg.add_vtable_declare(id, vtable.fs.len(), vtable.to_i8_arr());
+        self.classes.get_mut(&id).unwrap().vtable = vtable;
+        self.classes.get_mut(&id).unwrap().vtable_addr = vtable_addr;
     }
 
     pub fn get_class_id(&self, cname: &Ident) -> ClassId {

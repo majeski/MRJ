@@ -44,10 +44,9 @@ impl GenerateCode<(Val, CGType)> for Expr {
                 (ctx.cg.add_int_op(lhs_val, *op, rhs_val), t)
             }
             Expr::ENew(ref t) => {
-                let cgtype = ctx.to_cgtype(t);
-                let obj = ctx.cg.new_object(cgtype);
-                init_object(cgtype, obj, ctx);
-                (obj, cgtype)
+                let t = ctx.to_cgtype(t);
+                let obj = ctx.cg.add_call(t, format!("@._new_{}", t.get_id()), &vec![]);
+                (obj, t)
             }
             Expr::ENewArray(ref t, ref size) => {
                 let (size_val, _) = size.generate_code(ctx);
@@ -64,17 +63,26 @@ impl GenerateCode<(Val, CGType)> for Expr {
 }
 
 fn generate_call(ident: &FieldGet, args: &Vec<Expr>, ctx: &mut Context) -> (Val, CGType) {
-    let (obj, mut func_name): (Option<(Val, ClassId)>, Ident) = ident.generate_code(ctx);
+    let (obj, func_name): (Option<(Val, ClassId)>, Ident) = ident.generate_code(ctx);
+    let ret_type;
+    let arg_types;
+    let func;
     if obj.is_some() {
-        let mut id = obj.unwrap().1;
-        while !ctx.func_exists(&Ident(format!("class{}.{}", id, func_name))) {
-            id = ctx.get_class_data(id).get_super();
-        }
-        func_name = Ident(format!("class{}.{}", id, func_name));
-    }
+        let id = obj.unwrap().1;
+        ctx.cg.add_comment(format!("Accessing vtable begin"));
+        let vtable_pos = *ctx.get_class_data(id).vtable.idxs.get(&func_name).unwrap();
+        let f_info = ctx.get_class_data(id).vtable.fs[vtable_pos].clone();
 
-    let ret_type = ctx.get_ret_type(&func_name);
-    let arg_types = ctx.get_arg_types(&func_name);
+        ret_type = f_info.ret_type;
+        arg_types = f_info.arg_types.clone();
+        func = format!("{}",
+                       ctx.cg.load_vtable_entry(obj.unwrap().0, id, f_info.as_ptr(), vtable_pos));
+        ctx.cg.add_comment(format!("Accessing vtable end"));
+    } else {
+        ret_type = ctx.get_ret_type(&func_name);
+        arg_types = ctx.get_arg_types(&func_name);
+        func = format!("@{}", func_name);
+    }
 
     let mut arg_vals: Vec<(Val, CGType)> = args.iter().map(|a| a.generate_code(ctx)).collect();
     if let Some((val, id)) = obj {
@@ -89,7 +97,7 @@ fn generate_call(ident: &FieldGet, args: &Vec<Expr>, ctx: &mut Context) -> (Val,
         final_args.push((arg_val, arg_dst_t));
     }
 
-    (ctx.cg.add_call(ret_type, &func_name.0, &final_args), ret_type)
+    (ctx.cg.add_call(ret_type, func, &final_args), ret_type)
 }
 
 fn generate_or(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
@@ -192,51 +200,6 @@ fn generate_objects_eq(mut lhs: Val,
 
     let result = ctx.cg.add_op(t, lhs, Operator::OpEq, rhs);
     (result, CGType::bool_t())
-}
-
-fn init_object(t: CGType, obj: Val, ctx: &mut Context) {
-    let id = t.get_id();
-    if let Some(super_id) = ctx.get_class_data(id).super_id {
-        let super_t = CGType::obj_t(super_id);
-        let super_obj = ctx.cg.bitcast_object(obj, t, super_t);
-        init_object(super_t, super_obj, ctx);
-    }
-
-    let fields = ctx.get_class_data(id).get_fields();
-    for field in &fields {
-        let field_t = ctx.get_class_data(id).get_field_type(field);
-        let field_id = ctx.get_class_data(id).get_field_id(&field);
-        if field_t.is_arr() || field_t == CGType::str_t() {
-            continue;
-        }
-
-        let dst_addr = ctx.cg.get_field_addr(obj, t, field_id);
-        let val = if field_t.is_obj() {
-            Val::Null
-        } else if field_t == CGType::int_t() {
-            Val::Int(0)
-        } else if field_t == CGType::bool_t() {
-            Val::Int(0)
-        } else {
-            unreachable!()
-        };
-        ctx.cg.add_store(dst_addr, field_t, val);
-    }
-
-    let str_t = CGType::str_t();
-    if !fields.iter().any(|f| ctx.get_class_data(id).get_field_type(f) == str_t) {
-        return;
-    }
-
-    let empty_str = ctx.cg.alloc_string();
-    for field in fields {
-        if ctx.get_class_data(id).get_field_type(&field) == str_t {
-            let field_id = ctx.get_class_data(id).get_field_id(&field);
-            let dst_addr = ctx.cg.get_field_addr(obj, t, field_id);
-            ctx.cg.add_store(dst_addr, str_t, empty_str);
-            ctx.cg.retain_string(empty_str);
-        }
-    }
 }
 
 impl GenerateCode<(Val, CGType)> for Lit {

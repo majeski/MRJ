@@ -32,5 +32,6 @@ impl GenerateCode<()> for Func {
             }
         });
         ctx.cg.add_func_end(ret_type);
+        ctx.cg.reset();
     }
 }

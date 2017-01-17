@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use ast::Ident;
 
 use code_generation::cg_type::*;
+use code_generation::code_generator::*;
+use code_generation::vtable::*;
 
 #[derive(Debug, Clone)]
 pub struct ClassData {
@@ -11,6 +13,8 @@ pub struct ClassData {
     pub ident: Ident,
     pub fields: Vec<CGType>,
     field_ids: HashMap<Ident, usize>,
+    pub vtable: VTable,
+    pub vtable_addr: VTableConstant,
 }
 
 impl ClassData {
@@ -21,6 +25,8 @@ impl ClassData {
             ident: ident.clone(),
             fields: Vec::new(),
             field_ids: HashMap::new(),
+            vtable: VTable::new(),
+            vtable_addr: VTableConstant(0),
         }
     }
 
@@ -51,11 +57,7 @@ impl ClassData {
     }
 
     pub fn get_field_id(&self, ident: &Ident) -> usize {
-        let mut res = self.get_field_idx(ident);
-        if self.super_id.is_some() {
-            res += 1;
-        }
-        res
+        self.get_field_idx(ident) + 1
     }
 
     fn get_field_idx(&self, ident: &Ident) -> usize {

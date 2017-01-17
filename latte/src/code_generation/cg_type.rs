@@ -105,7 +105,7 @@ impl CGType {
         }
     }
 
-    pub fn user_type(self) -> String {
+    pub fn user_type(&self) -> String {
         if self.is_arr {
             format!("{{ i32, {} }}*", self.t.in_arr_type())
         } else {
@@ -113,7 +113,7 @@ impl CGType {
         }
     }
 
-    pub fn native_type(self) -> String {
+    pub fn native_type(&self) -> String {
         if self.is_arr {
             format!("{{ i32, {} }}", self.t.in_arr_type())
         } else {
@@ -137,16 +137,16 @@ impl RawType {
         format!("{}*", self.user_type())
     }
 
-    pub fn user_type(self) -> String {
-        match self {
+    pub fn user_type(&self) -> String {
+        match *self {
             RawType::TString |
             RawType::TObject(_) => format!("{}*", self.native_type()),
             _ => format!("{}", self.native_type()),
         }
     }
 
-    pub fn native_type(self) -> String {
-        match self {
+    pub fn native_type(&self) -> String {
+        match *self {
             RawType::TInt => format!("i32"),
             RawType::TBool => format!("i1"),
             RawType::TString => format!("%string_t"), // ref_count, char*, is_const

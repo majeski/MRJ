@@ -99,9 +99,13 @@ impl CodeGenerator {
 
     // object
     pub fn add_class_declare(&mut self, class_id: ClassId, fields: &Vec<CGType>) {
-        self.add_line_no_indent(format!("%class_{} = type {{ {} }}",
-                                        class_id,
-                                        join(fields, ',', CGType::user_type)));
+        let vtable_t = format!("i32 (...)**");
+        let fields_str = if fields.is_empty() {
+            vtable_t
+        } else {
+            format!("{}, {}", vtable_t, join(fields, ',', CGType::user_type))
+        };
+        self.add_line_no_indent(format!("%class_{} = type {{ {} }}", class_id, fields_str));
     }
 
     pub fn add_subclass_declare(&mut self,
@@ -118,6 +122,50 @@ impl CodeGenerator {
                                         super_id,
                                         fields_str));
     }
+
+    pub fn add_vtable_declare(&mut self,
+                              class_id: ClassId,
+                              size: usize,
+                              arr: String)
+                              -> VTableConstant {
+        let reg = VTableConstant(class_id);
+        self.add_line_no_indent(format!("@{} = private unnamed_addr constant [{} x i8*] {}",
+                                        reg,
+                                        size,
+                                        arr));
+        reg
+    }
+
+    pub fn store_vtable(&mut self, obj_addr: Val, class_id: ClassId, size: usize) {
+        let arr_t = format!("[{} x i8*]", size);
+        let vtable_t = format!("i32 (...)**");
+        let dst_addr =
+            self.new_reg(format!("bitcast %class_{}* {} to {}*", class_id, obj_addr, vtable_t));
+
+        let addr = self.new_reg(format!("getelementptr {0}, {0}* @.vtable_{1}, i64 0, i64 0",
+                                        arr_t,
+                                        class_id));
+        let val = self.new_reg(format!("bitcast i8** {} to {}", addr, vtable_t));
+        self.add_raw_store(dst_addr, vtable_t, val);
+    }
+
+    pub fn load_vtable_entry(&mut self,
+                             obj_addr: Val,
+                             class_id: ClassId,
+                             ftype: String,
+                             idx: usize)
+                             -> Val {
+        let vtable_addr =
+            self.new_reg(format!("bitcast %class_{}* {} to {}**", class_id, obj_addr, ftype));
+        let vtable_reg = self.add_raw_load(vtable_addr, format!("{}*", ftype));
+        let faddr = self.new_reg(format!("getelementptr {0}, {0}* {1}, i64 {2}",
+                                         ftype,
+                                         vtable_reg,
+                                         idx));
+        let f = self.add_raw_load(faddr, ftype);
+        f
+    }
+
 
     pub fn bitcast_object(&mut self, addr: Val, from: CGType, to: CGType) -> Val {
         self.new_reg(format!("bitcast {} {} to {}",
@@ -151,7 +199,9 @@ impl CodeGenerator {
             arg_regs.push((reg, *arg_t));
         }
 
-        let args_str = join(&arg_regs, ',', |(reg, arg_t)| format!("{} %{}", arg_t, reg));
+        let args_str = join(&arg_regs,
+                            ',',
+                            |&(reg, arg_t)| format!("{} %{}", arg_t, reg));
         self.add_line_no_indent(format!("define {} @{}({}) {}",
                                         ret_type,
                                         func_name,
@@ -180,11 +230,11 @@ impl CodeGenerator {
 
     pub fn add_call(&mut self,
                     ret_type: CGType,
-                    func_name: &String,
+                    func_name: String,
                     args: &Vec<(Val, CGType)>)
                     -> Val {
-        let args_str = join(args, ',', |(val, val_t)| format!("{} {}", val_t, val));
-        let call_str = format!("call {} @{}({})", ret_type, func_name, args_str);
+        let args_str = join(args, ',', |&(val, val_t)| format!("{} {}", val_t, val));
+        let call_str = format!("call {} {}({})", ret_type, func_name, args_str);
         if ret_type == CGType::void_t() {
             self.add_line(call_str);
             Val::Reg(self.dummy_reg())
@@ -222,18 +272,18 @@ impl CodeGenerator {
     }
 
     pub fn alloc_string(&mut self) -> Val {
-        self.add_call(CGType::str_t(), &format!("._alloc_str"), &vec![])
+        self.add_call(CGType::str_t(), format!("@._alloc_str"), &vec![])
     }
 
     pub fn retain_string(&mut self, struct_ptr: Val) {
         self.add_call(CGType::void_t(),
-                      &format!("._retain_str"),
+                      format!("@._retain_str"),
                       &vec![(struct_ptr, CGType::str_t())]);
     }
 
     pub fn release_string(&mut self, struct_ptr: Val) {
         self.add_call(CGType::void_t(),
-                      &format!("._release_str"),
+                      format!("@._release_str"),
                       &vec![(struct_ptr, CGType::str_t())]);
     }
 
@@ -252,7 +302,7 @@ impl CodeGenerator {
 
         if arr_t.arr_elem_t() == CGType::str_t() {
             self.add_call(CGType::void_t(),
-                          &format!("._init_str_arr"),
+                          format!("@._init_str_arr"),
                           &vec![(struct_ptr, arr_t)]);
         }
 
@@ -268,19 +318,15 @@ impl CodeGenerator {
     }
 
     fn add_malloc(&mut self, t: String, size: Val) -> Val {
-        self.add_comment(format!("Allocating {} begin", t));
         let size_of = self.get_sizeof(t.clone(), size);
         let void_addr = self.new_reg(format!("call i8* @malloc(i32 {})", size_of));
         let cast_addr = self.new_reg(format!("bitcast i8* {} to {}*", void_addr, t));
-        self.add_comment(format!("Allocating {} end", t));
         cast_addr
     }
 
     fn get_sizeof(&mut self, t: String, size: Val) -> Val {
-        self.add_comment(format!("Calculating sizeof({}) begin", t));
         let size_of = self.new_reg(format!("getelementptr {}, {}* null, i32 {}", t, t, size));
         let res = self.new_reg(format!("ptrtoint {}* {} to i32", t, size_of));
-        self.add_comment(format!("Calculating sizeof({}) end", t));
         res
     }
 
@@ -394,6 +440,9 @@ pub struct Register(i32);
 pub struct StrConstant(i32);
 
 #[derive(Debug, Clone, Copy)]
+pub struct VTableConstant(pub ClassId);
+
+#[derive(Debug, Clone, Copy)]
 pub struct Label(i32);
 
 impl fmt::Display for Val {
@@ -415,6 +464,12 @@ impl fmt::Display for Register {
 impl fmt::Display for StrConstant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, ".str_const_{}", self.0)
+    }
+}
+
+impl fmt::Display for VTableConstant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, ".vtable_{}", self.0)
     }
 }
 
