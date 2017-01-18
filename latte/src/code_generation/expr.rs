@@ -107,14 +107,20 @@ fn generate_or(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
 
     ctx.cg.add_jump(lhs_label);
     ctx.cg.add_label(lhs_label);
-    let (lhs_val, _) = lhs.generate_code(ctx);
-    let lhs_block = ctx.cg.get_current_label();
-    ctx.cg.add_cond_jump(lhs_val, end_label, rhs_label);
+    let lhs_block = ctx.in_new_scope(|ctx| {
+        let (lhs_val, _) = lhs.generate_code(ctx);
+        ctx.release_local_strings();
+        ctx.cg.add_cond_jump(lhs_val, end_label, rhs_label);
+        ctx.cg.get_current_label()
+    });
 
     ctx.cg.add_label(rhs_label);
-    let (rhs_val, _) = rhs.generate_code(ctx);
-    let rhs_block = ctx.cg.get_current_label();
-    ctx.cg.add_jump(end_label);
+    let (rhs_block, rhs_val) = ctx.in_new_scope(|ctx| {
+        let (rhs_val, _) = rhs.generate_code(ctx);
+        ctx.release_local_strings();
+        ctx.cg.add_jump(end_label);
+        (ctx.cg.get_current_label(), rhs_val)
+    });
 
     ctx.cg.add_label(end_label);
     let res_reg = ctx.cg.add_phi(CGType::bool_t(),
@@ -130,14 +136,18 @@ fn generate_and(lhs: &Expr, rhs: &Expr, ctx: &mut Context) -> (Val, CGType) {
 
     ctx.cg.add_jump(lhs_label);
     ctx.cg.add_label(lhs_label);
-    let (lhs_val, _) = lhs.generate_code(ctx);
-    let lhs_block = ctx.cg.get_current_label();
-    ctx.cg.add_cond_jump(lhs_val, rhs_label, end_label);
+    let lhs_block = ctx.in_new_scope(|ctx| {
+        let (lhs_val, _) = lhs.generate_code(ctx);
+        ctx.cg.add_cond_jump(lhs_val, rhs_label, end_label);
+        ctx.cg.get_current_label()
+    });
 
     ctx.cg.add_label(rhs_label);
-    let (rhs_val, _) = rhs.generate_code(ctx);
-    let rhs_block = ctx.cg.get_current_label();
-    ctx.cg.add_jump(end_label);
+    let (rhs_block, rhs_val) = ctx.in_new_scope(|ctx| {
+        let (rhs_val, _) = rhs.generate_code(ctx);
+        ctx.cg.add_jump(end_label);
+        (ctx.cg.get_current_label(), rhs_val)
+    });
 
     ctx.cg.add_label(end_label);
     let res_reg = ctx.cg.add_phi(CGType::bool_t(),

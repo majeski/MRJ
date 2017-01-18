@@ -134,7 +134,11 @@ impl GenerateCode<()> for Stmt {
 
                 ctx.cg.add_jump(cond_label);
                 ctx.cg.add_label(cond_label);
-                let (cond_val, _) = cond.generate_code(ctx);
+                let cond_val = ctx.in_new_scope(|ctx| {
+                    let (cond_val, _) = cond.generate_code(ctx);
+                    ctx.release_local_strings();
+                    cond_val
+                });
                 ctx.cg.add_cond_jump(cond_val, body_label, end_label);
 
                 ctx.cg.add_label(body_label);
@@ -230,7 +234,8 @@ impl GenerateCode<()> for VarDecl {
                     Type::TInt => Lit::LInt(0),
                     Type::TBool => Lit::LFalse,
                     Type::TString => Lit::LString(String::new()),
-                    Type::TObject(..) => Lit::LNull(None),
+                    Type::TObject(..) |
+                    Type::TArray(..) => Lit::LNull(None),
                     _ => unreachable!(),
                 };
                 let t = ctx.to_cgtype(t);

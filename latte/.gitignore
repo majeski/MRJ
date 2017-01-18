@@ -4,3 +4,5 @@ src/parser/*.o
 src/parser/latte.tab.*
 src/parser/lex.yy.c
 src/parser/libparse.a
+tests/good/*.ll
+tests/good/*.bc

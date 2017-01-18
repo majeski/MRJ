@@ -65,8 +65,11 @@ impl CollectStringLit for Func {
 impl CollectStringLit for Stmt {
     fn collect(&self, res: &mut HashSet<String>) {
         match *self {
-            Stmt::SIf(_, ref s) |
-            Stmt::SWhile(_, ref s) => s.collect(res),
+            Stmt::SIf(ref e, ref s) |
+            Stmt::SWhile(ref e, ref s) => {
+                e.collect(res);
+                s.collect(res);
+            }
             Stmt::SBlock(ref stmts) => stmts.collect(res),
             Stmt::SDecl(_, ref var_decls) => var_decls.collect(res),
             Stmt::SAssign(_, ref e) |

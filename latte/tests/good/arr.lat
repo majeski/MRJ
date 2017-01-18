@@ -1,0 +1,79 @@
+int main() {
+  {
+    int[] a;
+    int[] b = new int[3];
+    a = new int[3];
+    a[2] = 1;
+    a[2];
+    a.length;
+    if (a.length != 3 || a[2] != 1) {
+      error();
+    }
+  }
+  {
+    boolean[] a;
+    boolean[] b = new boolean[3];
+    a = new boolean[3];
+    a[2] = false;
+    a[2];
+    a.length;
+    if (a.length != 3 || a[2]) {
+      error();
+    }
+  }
+  {
+    A obj = new A;
+    A[] a;
+    A[] b = new A[3];
+    a = new A[3];
+    a[2] = null;
+    a[2] = obj;
+    a[2];
+    a.length;
+    if (a.length != 3 || a[2] != obj) {
+      error();
+    }
+  }
+  {
+    string str = "asd";
+    string[] a;
+    string[] b = new string[3];
+    a = new string[3];
+    a[2] = str;
+    a[2];
+    a.length;
+    if (a.length != 3 || a[2] != str) {
+      error();
+    }
+  }
+  {
+    int[] a = new int[5];
+    f(a)[2] = 3;
+    f(a)[1];
+    f(a).length;
+    if (f(a).length != 5) {
+      error();
+    }
+  }
+  {
+    A a = new A;
+    int[] t = new int[5];
+    a.f(t)[0] = 3;
+    a.f(t)[0];
+    a.f(t).length;
+    if (a.f(t).length != t.length) {
+      error();
+    }
+  }
+  return 0;
+}
+
+class A {
+  int[] f(int[] a) {
+    return a;
+  }
+}
+
+int[] f(int[] a) {
+  return new int[5];
+}
