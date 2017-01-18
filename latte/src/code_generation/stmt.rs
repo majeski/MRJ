@@ -41,7 +41,7 @@ impl GenerateCode<()> for Stmt {
                     ctx.cg.retain_string(val_reg);
                     ctx.cg.release_string(old_val_reg);
                 }
-                if t != expr_t {
+                if t != expr_t && expr_t != CGType::null_t() {
                     val_reg = ctx.cg.bitcast_object(val_reg, expr_t, t);
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);
@@ -64,7 +64,7 @@ impl GenerateCode<()> for Stmt {
                 if t == CGType::str_t() {
                     ctx.cg.retain_string(val_reg);
                 }
-                if t != expr_t {
+                if t != expr_t && expr_t != CGType::null_t() {
                     val_reg = ctx.cg.bitcast_object(val_reg, expr_t, t);
                 }
                 ctx.release_all_strings();
@@ -219,7 +219,7 @@ impl GenerateCode<()> for VarDecl {
                 if t == CGType::str_t() {
                     ctx.cg.retain_string(val_reg);
                 }
-                if t != expr_t {
+                if t != expr_t && expr_t != CGType::null_t() {
                     val_reg = ctx.cg.bitcast_object(val_reg, expr_t, t);
                 }
                 ctx.cg.add_store(addr_reg, t, val_reg);

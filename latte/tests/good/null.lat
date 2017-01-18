@@ -1,0 +1,22 @@
+int main() {
+  A a = null;
+  a = new A;
+  a.f(null);
+  a = null;
+  a == null;
+  null == a;
+  null == null;
+  a != null;
+  null != a;
+  null != null;
+  f(null);
+  return 0;
+}
+
+A f(A a) { return null; }
+
+class A {
+  A f(A a) {
+    return null;
+  }
+}

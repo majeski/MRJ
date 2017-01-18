@@ -91,7 +91,7 @@ fn generate_call(ident: &FieldGet, args: &Vec<Expr>, ctx: &mut Context) -> (Val,
 
     let mut final_args: Vec<(Val, CGType)> = Vec::new();
     for ((mut arg_val, arg_t), arg_dst_t) in arg_vals.into_iter().zip(arg_types) {
-        if arg_t != arg_dst_t {
+        if arg_t != arg_dst_t && arg_t != CGType::null_t() {
             arg_val = ctx.cg.bitcast_object(arg_val, arg_t, arg_dst_t);
         }
         final_args.push((arg_val, arg_dst_t));
