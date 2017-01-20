@@ -1,0 +1,5 @@
+int main() {
+  "asd" + "efg";
+  printInt(3);
+  return 0;
+}

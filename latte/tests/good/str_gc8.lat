@@ -1,0 +1,12 @@
+int main() {
+  string s = "asd";
+  {
+    string[] tab = new string[3];
+    tab[0] = s;
+    tab[1] = s;
+    printInt(1); // default string in array
+    tab[2] = s;
+    // s won't be freed
+  }
+  return 0;
+}

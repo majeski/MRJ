@@ -1,0 +1,16 @@
+int main() {
+  for (int x : g(f())) {
+  }
+  printInt(1);
+  return 0;
+}
+
+string f() {
+  printInt(2);
+  return "Asd" + "bcd";
+}
+
+int[] g(string s) {
+  s = s;
+  return new int[3];
+}

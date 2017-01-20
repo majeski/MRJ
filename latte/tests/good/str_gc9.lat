@@ -1,0 +1,29 @@
+int main() {
+  C c = new C;
+  printInt(1); // s.s1
+  { c.s1 = c.s2; }
+  { c.s2 = c.s3; }
+
+  string s = "asd";
+
+  printInt(1);
+  c.s1 = s; // s.s2
+  c.s2 = s;
+  printInt(1);
+  c.s3 = s;
+  // s won't be freed
+  return 0;
+}
+
+class A {
+  string s1;
+}
+
+class B extends A {
+  string s2;
+}
+
+class C extends B {
+  string s3;
+}
+

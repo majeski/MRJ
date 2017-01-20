@@ -1,0 +1,17 @@
+int main() {
+  string s = "efc";
+  {
+    string s1 = s;
+    {
+      string s2 = s;
+      {
+        string s3 = s;
+      }
+    }
+    printInt(1);
+    if (s1 == s1) {
+      return 0;
+    }
+  }
+  return 1;
+}

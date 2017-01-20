@@ -1,0 +1,17 @@
+int main() {
+  string s1 = "asd";
+  {
+    string s2 = s1;
+    s2 = "edf";
+    {
+      string s3 = s2;
+      s3 = "efc";
+      s2 = s3;
+    }
+    s1 = s2;
+    printInt(1);  // "edf"
+  }
+
+  printInt(2);  // "asd" + "efc"
+  return 0;
+}

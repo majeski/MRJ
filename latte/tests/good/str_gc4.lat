@@ -1,0 +1,20 @@
+int main() {
+  int i = 2;
+  printInt(2);
+  while (i > 0 && "asd" != "bcd") {
+    i--;
+    if (i > 0) {
+      printInt(2);
+    }
+  }
+
+  i = 2;
+  while (i > 0 || "asd" == "bcd") {
+    i--;
+    if (i == 0) {
+      printInt(2);
+    }
+  }
+
+  return 0;
+}
