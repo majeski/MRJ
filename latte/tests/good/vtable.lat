@@ -1,0 +1,77 @@
+int main() {
+  A a = new A;
+  B b = new B;
+  C c = new C;
+  D d = new D;
+
+  a.fa();
+  b.fa();
+  b.fb();
+  c.fa();
+  c.fb();
+  c.fc();
+  d.fa();
+  d.fb();
+
+  printString("---");
+  {
+    A x = b;
+    x.fa();
+    x = c;
+    x.fa();
+    x = d;
+    x.fa();
+  }
+
+  printString("---");
+  {
+    B x = c;
+    x.fa();
+    x.fb();
+    x = d;
+    x.fa();
+    x.fb();
+  }
+
+  return 0;
+}
+
+class A {
+  void fa() {
+    printString("fa A");
+  }
+}
+
+class B extends A {
+  void fa() {
+    printString("fa B");
+  }
+
+  void fb() {
+    printString("fb B");
+  }
+}
+
+class C extends B {
+  void fa() {
+    printString("fa C");
+  }
+
+  void fb() {
+    printString("fb C");
+  }
+
+  void fc() {
+    printString("fc C");
+  }
+}
+
+class D extends B {
+  void fa() {
+    printString("fa D");
+  }
+
+  void fb() {
+    printString("fb D");
+  }
+}
