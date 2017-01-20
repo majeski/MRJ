@@ -228,11 +228,7 @@ start:
   %str_arr = extractvalue { i32, %string_t** } %arr_val, 1
 
   ; create empty string
-  %sizeof_tmp = getelementptr %string_t, %string_t* null, i32 1
-  %sizeof = ptrtoint %string_t* %sizeof_tmp to i64
-  %struct_ptr_tmp = call i8* @malloc(i64 %sizeof)
-  %struct_ptr = bitcast i8* %struct_ptr_tmp to %string_t*
-
+  %struct_ptr = call %string_t* @._alloc_str()
   %struct_tmp = insertvalue %string_t undef, i32 %size, 0
   %struct_tmp2 = insertvalue %string_t %struct_tmp, i8* null, 1
   %struct = insertvalue %string_t %struct_tmp2, i1 false, 2
@@ -265,11 +261,10 @@ define %string_t* @._alloc_str() {
 }
 
 define void @._retain_str(%string_t* %s) {
-  %s_val = load %string_t, %string_t* %s
-  %refs = extractvalue %string_t %s_val, 0
-  %new_refs = add i32 %refs, 1
-  %s_new_val = insertvalue %string_t %s_val, i32 %new_refs, 0
-  store %string_t %s_new_val, %string_t* %s
+  %addr = getelementptr %string_t, %string_t* %s, i32 0, i32 0
+  %val = load i32, i32* %addr
+  %new_val = add i32 %val, 1
+  store i32 %new_val, i32* %addr
   ret void
 }
 
