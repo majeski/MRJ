@@ -1,0 +1,7 @@
+class A {}
+class B extends A {}
+
+int main() {
+  A a = (B)null;
+  return 0;
+}
