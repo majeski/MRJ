@@ -278,7 +278,11 @@ impl<'a> HasType<(), &'a mut TypeContext> for Stmt {
             Stmt::SFor(ref t, ref ident, ref e, ref stmt) => {
                 let e_type = e.check_types(ctx)?;
                 expect_declarable_type(&e_type, ctx)?;
-                expect_type(&Type::TArray(Box::new(t.clone())), &e_type, ctx)?;
+                if let Type::TArray(ref elem_t) = e_type {
+                    expect_type(t, &**elem_t, ctx)?;
+                } else {
+                    expect_type(&Type::TArray(Box::new(t.clone())), &e_type, ctx)?;
+                }
                 ctx.in_new_scope(|mut ctx| {
                         add_ident(ident, t, &mut ctx)?;
                         stmt.check_types(&mut ctx)?;

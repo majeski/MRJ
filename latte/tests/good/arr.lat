@@ -65,6 +65,9 @@ int main() {
       error();
     }
   }
+
+  B[] tab = new B[5];
+  for (A a : tab);
   return 0;
 }
 
@@ -73,6 +76,8 @@ class A {
     return a;
   }
 }
+
+class B extends A {}
 
 int[] f(int[] a) {
   return new int[5];
