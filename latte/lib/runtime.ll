@@ -179,28 +179,23 @@ define i8* @._raw_concatenate(i8*, i8*) #0 {
   ret i8* %36
 }
 
-define void @printString({ i32, i8* }* %s) {
-  %s_val = load { i32, i8* }, { i32, i8* }* %s
-  %str = extractvalue { i32, i8* } %s_val, 1
-  call i32 @puts(i8* %str)
+%string_t = type { i32, i8*, i1 }
+
+define void @printString(%string_t* %s) {
+  %ptr_addr = getelementptr %string_t, %string_t* %s, i32 0, i32 1
+  %ptr = load i8*, i8** %ptr_addr
+  call i32 @puts(i8* %ptr)
   ret void
 }
 
-define { i32, i8* }* @readString() {
+define %string_t* @readString() {
   %str = call i8* @._readString()
-
-  %sizeof_tmp = getelementptr { i32, i8* }, { i32, i8* }* null, i32 1
-  %sizeof = ptrtoint { i32, i8* }* %sizeof_tmp to i64
-  %struct_ptr_tmp = call i8* @malloc(i64 %sizeof)
-  %struct_ptr = bitcast i8* %struct_ptr_tmp to { i32, i8* }*
-
-  %struct_tmp = insertvalue { i32, i8* } undef, i32 1, 0
-  %struct = insertvalue { i32, i8* } %struct_tmp, i8* %str, 1
-  store { i32, i8* } %struct, { i32, i8* }* %struct_ptr
-  ret { i32, i8* }* %struct_ptr
+  %struct_ptr = call %string_t* @._alloc_str()
+  call void @._retain_str(%string_t* %struct_ptr)
+  %ptr_addr = getelementptr %string_t, %string_t* %struct_ptr, i32 0, i32 1
+  store i8* %str, i8** %ptr_addr
+  ret %string_t* %struct_ptr
 }
-
-%string_t = type { i32, i8*, i1 }
 
 define %string_t* @._concatenate(%string_t* %r_1, %string_t* %r_2) {
 ; Getting lhs string
